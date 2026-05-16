@@ -1027,7 +1027,7 @@ export default function Home() {
     );
   };
 
-  const resetDemo = async () => {
+  const reloadDatabaseState = async () => {
     const response = await fetch("/api/state", { cache: "no-store" });
     if (!response.ok) {
       setLoadError("Could not reload database state.");
@@ -1121,16 +1121,8 @@ export default function Home() {
           <div className="flex items-center gap-3">
             <button
               className="icon-button"
-              onClick={() =>
-                requestConfirmation({
-                  title: "Reset Demo Data",
-                  message: "This restores the seeded scenario and clears local changes in this browser.",
-                  confirmLabel: "Reset demo",
-                  tone: "danger",
-                  onConfirm: resetDemo,
-                })
-              }
-              title="Reset seeded demo data"
+              onClick={reloadDatabaseState}
+              title="Refresh database state"
             >
               <RotateCcw size={18} />
             </button>
@@ -2524,12 +2516,15 @@ function LoginScreen({
               </div>
               {role === "Employee" && (
                 <Field label="Manager Email">
-                  <input
-                    value={managerEmail}
-                    onChange={(event) => setManagerEmail(event.target.value)}
-                    placeholder="manager@company.com"
-                    autoComplete="email"
-                  />
+                  <>
+                    <input
+                      value={managerEmail}
+                      onChange={(event) => setManagerEmail(event.target.value)}
+                      placeholder="manager@company.com"
+                      autoComplete="email"
+                    />
+                    <p className="text-xs text-slate-500">Employee signup links this account to an existing manager.</p>
+                  </>
                 </Field>
               )}
             </>
