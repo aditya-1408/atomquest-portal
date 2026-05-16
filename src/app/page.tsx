@@ -756,7 +756,8 @@ export default function Home() {
       | "GOAL_APPROVED"
       | "GOAL_RETURNED"
       | "CHECK_IN_COMPLETED"
-      | "CYCLE_PHASE_CHANGED";
+      | "CYCLE_PHASE_CHANGED"
+      | "TEST_NOTIFICATION";
     employeeId?: string;
     managerId?: string;
     phase?: string;
@@ -1151,6 +1152,13 @@ export default function Home() {
             <h1 className="text-xl font-semibold">Goal Setting & Tracking Portal</h1>
           </div>
           <div className="flex items-center gap-3">
+            <button
+              className="secondary-button"
+              onClick={() => notifyWorkflow({ event: "TEST_NOTIFICATION" })}
+              title="Send test email and Teams notification"
+            >
+              Test notification
+            </button>
             <button
               className="icon-button"
               onClick={reloadDatabaseState}

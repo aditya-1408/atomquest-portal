@@ -161,6 +161,7 @@ Implemented notification events:
 - Check-in completed -> employee and manager email/card.
 - Cycle phase changed -> all users email/card.
 - Weekly check-in reminders -> employee and manager email/card.
+- Header `Test notification` button -> signed-in user email/card for configuration testing.
 
 ## Future Enterprise Upgrade Path
 

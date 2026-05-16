@@ -11,7 +11,8 @@ type NotificationEvent =
   | "GOAL_APPROVED"
   | "GOAL_RETURNED"
   | "CHECK_IN_COMPLETED"
-  | "CYCLE_PHASE_CHANGED";
+  | "CYCLE_PHASE_CHANGED"
+  | "TEST_NOTIFICATION";
 
 type NotificationRequest = {
   event?: NotificationEvent;
@@ -90,6 +91,13 @@ export async function POST(request: Request) {
     message = `${sessionUser.name} changed the active cycle phase to ${body.phase ?? "a new phase"}.`;
     recipients = users.map((user) => user.email);
     deepLink = atomQuestLink("/", { view: roleLabel(sessionUser.role) === "Admin / HR" ? "Users & Cycles" : "Dashboard" });
+  }
+
+  if (body.event === "TEST_NOTIFICATION") {
+    title = "AtomQuest test notification";
+    message = `Test notification sent by ${sessionUser.name}. Email and Teams configuration is connected if this appears in provider logs.`;
+    recipients = [sessionUser.email];
+    deepLink = atomQuestLink("/", { view: "Dashboard" });
   }
 
   const result = await sendNotification({
