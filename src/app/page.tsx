@@ -102,6 +102,15 @@ type Confirmation = {
   onConfirm: () => void;
 };
 
+type Escalation = {
+  id: string;
+  level: number;
+  owner: string;
+  type: string;
+  message: string;
+  nextAction: string;
+};
+
 type SharedGoalDraft = {
   title: string;
   description: string;
@@ -411,6 +420,74 @@ function quarterForPhase(phase: string): Quarter | null {
   if (phase.startsWith("Q3")) return "Q3";
   if (phase.startsWith("Q4")) return "Q4";
   return null;
+}
+
+function buildEscalations(state: AppState): Escalation[] {
+  const activeQuarter = quarterForPhase(state.cycle.phase);
+  const employees = state.users.filter((user) => user.role === "Employee");
+  const escalations: Escalation[] = [];
+
+  for (const employee of employees) {
+    const manager = state.users.find((user) => user.id === employee.managerId);
+    const goals = state.goals.filter((goal) => goal.employeeId === employee.id);
+    const hasSubmittedGoals = goals.some((goal) => goal.status === "Submitted");
+    const hasDraftGoals = goals.some((goal) => goal.status === "Draft" || goal.status === "Returned");
+    const hasApprovedGoals = goals.some((goal) => goal.status === "Approved");
+
+    if (state.cycle.phase === "Goal Setting") {
+      if (hasSubmittedGoals) {
+        escalations.push({
+          id: `${employee.id}-approval`,
+          level: 1,
+          owner: manager?.name ?? "Unassigned manager",
+          type: "Manager approval pending",
+          message: `${employee.name}'s submitted goal sheet is awaiting L1 approval.`,
+          nextAction: "Manager should approve and lock or return for rework.",
+        });
+      } else if (hasDraftGoals || goals.length === 0) {
+        escalations.push({
+          id: `${employee.id}-submission`,
+          level: 1,
+          owner: employee.name,
+          type: "Employee submission pending",
+          message: `${employee.name} has not submitted a complete goal sheet for the active cycle.`,
+          nextAction: "Employee should complete goals with 100% total weightage and submit.",
+        });
+      }
+    }
+
+    if (activeQuarter && hasApprovedGoals) {
+      const approvedGoals = goals.filter((goal) => goal.status === "Approved");
+      const missingUpdates = approvedGoals.filter(
+        (goal) => !state.updates.some((update) => update.goalId === goal.id && update.quarter === activeQuarter),
+      );
+      const checkInDone = state.checkIns.some(
+        (checkIn) => checkIn.employeeId === employee.id && checkIn.quarter === activeQuarter,
+      );
+
+      if (missingUpdates.length > 0) {
+        escalations.push({
+          id: `${employee.id}-${activeQuarter}-updates`,
+          level: 1,
+          owner: employee.name,
+          type: `${activeQuarter} achievement pending`,
+          message: `${employee.name} has ${missingUpdates.length} approved goal update${missingUpdates.length === 1 ? "" : "s"} pending for ${activeQuarter}.`,
+          nextAction: "Employee should enter actual achievement, status, and comment.",
+        });
+      } else if (!checkInDone) {
+        escalations.push({
+          id: `${employee.id}-${activeQuarter}-checkin`,
+          level: 2,
+          owner: manager?.name ?? "Unassigned manager",
+          type: `${activeQuarter} manager check-in pending`,
+          message: `${employee.name}'s ${activeQuarter} achievements are updated, but the manager check-in is not completed.`,
+          nextAction: "Manager should review planned vs actual and record the structured check-in comment.",
+        });
+      }
+    }
+  }
+
+  return escalations;
 }
 
 export default function Home() {
@@ -1735,6 +1812,8 @@ function AdminUsers({
 }
 
 function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => void }) {
+  const activeQuarter = quarterForPhase(state.cycle.phase);
+  const escalations = buildEscalations(state);
   const byThrust = Object.values(
     state.goals.reduce<Record<string, { name: string; value: number }>>((acc, goal) => {
       acc[goal.thrustArea] = acc[goal.thrustArea] ?? { name: goal.thrustArea, value: 0 };
@@ -1786,10 +1865,25 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
           ))}
         </div>
       </Panel>
-      <Panel title="Escalation Preview">
+      <Panel title="Rule-Based Escalation Log">
+        <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+          Active rule set: {state.cycle.phase === "Goal Setting" ? "goal submission and L1 approval" : activeQuarter ? `${activeQuarter} achievement and check-in completion` : "cycle closed"}.
+        </div>
         <div className="space-y-3">
-          <div className="alert"><AlertTriangle size={17} /> Karan Iyer has a submitted sheet pending manager approval.</div>
-          <div className="alert"><AlertTriangle size={17} /> Q1 check-in missing for one employee.</div>
+          {escalations.map((item) => (
+            <div className="alert items-start" key={item.id}>
+              <AlertTriangle className="mt-0.5 shrink-0" size={17} />
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <strong>{item.type}</strong>
+                  <span className="status-badge">Level {item.level}</span>
+                </div>
+                <p>{item.message}</p>
+                <p className="text-xs text-slate-600">Owner: {item.owner} | Next action: {item.nextAction}</p>
+              </div>
+            </div>
+          ))}
+          {escalations.length === 0 && <Empty text="No active escalations for the current cycle phase." />}
         </div>
       </Panel>
     </div>
