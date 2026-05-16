@@ -1708,7 +1708,14 @@ function ManagerCheckIns(props: {
 
   const selectedEmployee = props.selectedEmployee;
   const existing = props.checkIns.find((checkIn) => checkIn.employeeId === selectedEmployee.id && checkIn.quarter === props.quarter);
-  const canComplete = props.activeQuarter === props.quarter;
+  const approvedGoals = props.goals.filter((goal) => goal.status === "Approved");
+  const allApprovedGoalsUpdated =
+    approvedGoals.length > 0 &&
+    approvedGoals.every((goal) =>
+      props.updates.some((item) => item.goalId === goal.id && item.quarter === props.quarter),
+    );
+  const activeComment = comment || existing?.comment || "";
+  const canComplete = props.activeQuarter === props.quarter && allApprovedGoalsUpdated && activeComment.trim().length > 0;
 
   return (
     <Panel
@@ -1727,14 +1734,16 @@ function ManagerCheckIns(props: {
       )}
       {props.activeQuarter && !canComplete && (
         <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-          {props.activeQuarter} is the active check-in window. You can review {props.quarter}, but completion is locked.
+          {props.activeQuarter === props.quarter
+            ? "Complete all employee achievement updates and add a structured comment before closing this check-in."
+            : `${props.activeQuarter} is the active check-in window. You can review ${props.quarter}, but completion is locked.`}
         </div>
       )}
       <div className="overflow-x-auto">
         <table>
           <thead><tr><th>Goal</th><th>Planned</th><th>Actual</th><th>Status</th><th>Progress</th></tr></thead>
           <tbody>
-            {props.goals.map((goal) => {
+            {approvedGoals.map((goal) => {
               const update = props.updates.find((item) => item.goalId === goal.id && item.quarter === props.quarter);
               return (
                 <tr key={goal.id}>
@@ -1748,16 +1757,17 @@ function ManagerCheckIns(props: {
             })}
           </tbody>
         </table>
+        {approvedGoals.length === 0 && <Empty text="No approved goals are available for manager check-in yet." />}
       </div>
       <Field label="Structured Check-in Comment">
         <textarea
-          value={comment || existing?.comment || ""}
-          disabled={!canComplete}
+          value={activeComment}
+          disabled={props.activeQuarter !== props.quarter}
           onChange={(e) => setComment(e.target.value)}
           placeholder="Discussion summary, blockers, next actions..."
         />
       </Field>
-      <button className="primary-button mt-4" disabled={!canComplete} onClick={() => props.completeCheckIn(comment || existing?.comment || "")}>
+      <button className="primary-button mt-4" disabled={!canComplete} onClick={() => props.completeCheckIn(activeComment)}>
         <MessageSquare size={17} /> Complete check-in
       </button>
     </Panel>
