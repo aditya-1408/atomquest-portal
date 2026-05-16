@@ -419,37 +419,51 @@ export default function Home() {
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
+  const loadDatabaseState = async (userId: string) => {
+    const response = await fetch("/api/state", { cache: "no-store" });
+    if (!response.ok) throw new Error("Could not load database state.");
+    const databaseState = (await response.json()) as AppState;
+    setState(databaseState);
+    setActiveUserId(userId);
+    setActiveEmployeeId(
+      databaseState.users.find((user) => user.id === userId && user.role === "Employee")?.id ??
+        databaseState.users.find((user) => user.role === "Employee")?.id ??
+        "u-employee",
+    );
+    setHasLoadedDatabase(true);
+    setLoadError("");
+  };
+
   useEffect(() => {
     let cancelled = false;
-    async function loadState() {
+    async function restoreSession() {
       try {
-        const response = await fetch("/api/state", { cache: "no-store" });
-        if (!response.ok) throw new Error("Could not load database state.");
-        const databaseState = (await response.json()) as AppState;
+        const sessionResponse = await fetch("/api/auth/session", { cache: "no-store" });
         if (cancelled) return;
-        const savedUserId = window.sessionStorage.getItem("atomquest-user-id");
-        const savedUser = databaseState.users.find((user) => user.id === savedUserId);
-        setState(databaseState);
-        if (savedUser) {
-          setActiveUserId(savedUser.id);
-          setActiveEmployeeId(savedUser.role === "Employee" ? savedUser.id : databaseState.users.find((user) => user.role === "Employee")?.id ?? "u-employee");
+        if (!sessionResponse.ok) {
+          setHasLoadedDatabase(true);
+          return;
         }
-        setHasLoadedDatabase(true);
-        setLoadError("");
+        const session = (await sessionResponse.json()) as { user?: User };
+        if (!session.user) {
+          setHasLoadedDatabase(true);
+          return;
+        }
+        await loadDatabaseState(session.user.id);
       } catch (error) {
         if (cancelled) return;
-        setLoadError(error instanceof Error ? error.message : "Could not load database state.");
+        setLoadError(error instanceof Error ? error.message : "Could not restore session.");
         setHasLoadedDatabase(true);
       }
     }
-    loadState();
+    restoreSession();
     return () => {
       cancelled = true;
     };
   }, []);
 
   useEffect(() => {
-    if (!hasLoadedDatabase) return;
+    if (!hasLoadedDatabase || !activeUserId) return;
     const timer = window.setTimeout(async () => {
       try {
         setSaveStatus("saving");
@@ -465,7 +479,7 @@ export default function Home() {
       }
     }, 500);
     return () => window.clearTimeout(timer);
-  }, [hasLoadedDatabase, state]);
+  }, [activeUserId, hasLoadedDatabase, state]);
 
   const activeUser = state.users.find((user) => user.id === activeUserId);
   const employees = state.users.filter((user) => user.role === "Employee");
@@ -501,6 +515,7 @@ export default function Home() {
       });
       const result = (await response.json()) as { userId?: string; error?: string };
       if (!response.ok || !result.userId) throw new Error(result.error ?? "Login failed.");
+      await loadDatabaseState(result.userId);
       completeLogin(result.userId);
       setLoginPassword("");
     } catch (error) {
@@ -510,11 +525,12 @@ export default function Home() {
     }
   };
 
-  const logout = () => {
-    window.sessionStorage.removeItem("atomquest-user-id");
+  const logout = async () => {
+    await fetch("/api/auth/logout", { method: "POST" });
     setActiveUserId("");
     setView("Dashboard");
     setLoginPassword("");
+    setSaveStatus("idle");
   };
 
   const nav = useMemo(() => {

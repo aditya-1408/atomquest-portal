@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { createSessionToken, sessionCookieName } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -28,5 +29,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
   }
 
-  return NextResponse.json({ userId: user.id });
+  const response = NextResponse.json({ userId: user.id });
+  response.cookies.set(sessionCookieName, createSessionToken(user.id), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 60 * 8,
+  });
+  return response;
 }

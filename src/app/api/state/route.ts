@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getSessionUser } from "@/lib/auth";
 
 export const runtime = "nodejs";
 
@@ -255,6 +256,11 @@ function textToAuditJson(value?: string) {
 }
 
 export async function GET() {
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) {
+    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  }
+
   const [users, cycle, goals, updates, checkIns, sharedGoals, auditLogs] = await Promise.all([
     prisma.user.findMany({ orderBy: { createdAt: "asc" } }),
     prisma.cycle.findFirst({ orderBy: { createdAt: "asc" } }),
@@ -274,8 +280,46 @@ export async function GET() {
     return NextResponse.json({ error: "No active cycle found. Run prisma db seed first." }, { status: 404 });
   }
 
+  const allUsers = users as DbUser[];
+  const allGoals = goals as DbGoal[];
+  const allUpdates = updates as DbUpdate[];
+  const allCheckIns = checkIns as DbCheckIn[];
+  const allSharedGoals = sharedGoals as DbSharedGoal[];
+  const allAuditLogs = auditLogs as DbAuditLog[];
+
+  const visibleEmployeeIds =
+    sessionUser.role === "ADMIN"
+      ? allUsers.filter((user) => user.role === "EMPLOYEE").map((user) => user.id)
+      : sessionUser.role === "MANAGER"
+        ? allUsers.filter((user) => user.managerId === sessionUser.id).map((user) => user.id)
+        : [sessionUser.id];
+  const visibleUserIds = new Set([
+    sessionUser.id,
+    ...visibleEmployeeIds,
+    ...allUsers.filter((user) => visibleEmployeeIds.includes(user.id) && user.managerId).map((user) => user.managerId as string),
+  ]);
+  const visibleGoalIds = new Set(allGoals.filter((goal) => visibleEmployeeIds.includes(goal.employeeId)).map((goal) => goal.id));
+  const visibleSharedGoalIds = new Set(
+    allGoals
+      .filter((goal) => visibleEmployeeIds.includes(goal.employeeId) && goal.sharedGoalId)
+      .map((goal) => goal.sharedGoalId as string),
+  );
+
+  const scopedUsers = allUsers.filter((user) => visibleUserIds.has(user.id));
+  const scopedGoals = allGoals.filter((goal) => visibleGoalIds.has(goal.id));
+  const scopedUpdates = allUpdates.filter((update) => visibleGoalIds.has(update.goalId));
+  const scopedCheckIns = allCheckIns.filter((checkIn) => visibleEmployeeIds.includes(checkIn.employeeId));
+  const scopedSharedGoals =
+    sessionUser.role === "ADMIN"
+      ? allSharedGoals
+      : allSharedGoals.filter((goal) => visibleSharedGoalIds.has(goal.id));
+  const scopedAuditLogs =
+    sessionUser.role === "ADMIN"
+      ? allAuditLogs
+      : allAuditLogs.filter((log) => visibleEmployeeIds.includes(log.entityId) || log.actor.name === sessionUser.name);
+
   const state: AppState = {
-    users: (users as DbUser[]).map((user: DbUser) => ({
+    users: scopedUsers.map((user: DbUser) => ({
       id: user.id,
       name: user.name,
       email: user.email,
@@ -283,7 +327,7 @@ export async function GET() {
       department: user.department,
       managerId: user.managerId ?? undefined,
     })),
-    goals: (goals as DbGoal[]).map((goal: DbGoal) => ({
+    goals: scopedGoals.map((goal: DbGoal) => ({
       id: goal.id,
       employeeId: goal.employeeId,
       thrustArea: goal.thrustArea,
@@ -299,7 +343,7 @@ export async function GET() {
       sharedGoalId: goal.sharedGoalId ?? undefined,
       primaryOwner: goal.primaryOwner,
     })),
-    updates: (updates as DbUpdate[]).map((update: DbUpdate) => ({
+    updates: scopedUpdates.map((update: DbUpdate) => ({
       id: update.id,
       goalId: update.goalId,
       quarter: update.quarter,
@@ -309,7 +353,7 @@ export async function GET() {
       employeeComment: update.employeeComment ?? "",
       progressScore: update.progressScore,
     })),
-    checkIns: (checkIns as DbCheckIn[]).map((checkIn: DbCheckIn) => ({
+    checkIns: scopedCheckIns.map((checkIn: DbCheckIn) => ({
       id: checkIn.id,
       employeeId: checkIn.employeeId,
       managerId: checkIn.managerId,
@@ -317,7 +361,7 @@ export async function GET() {
       comment: checkIn.comment,
       completedAt: dateOnly(checkIn.completedAt),
     })),
-    sharedGoals: (sharedGoals as DbSharedGoal[]).map((goal: DbSharedGoal) => ({
+    sharedGoals: scopedSharedGoals.map((goal: DbSharedGoal) => ({
       id: goal.id,
       ownerId: goal.ownerId,
       title: goal.title,
@@ -328,7 +372,7 @@ export async function GET() {
       targetValue: goal.targetValue,
       targetDate: dateOnly(goal.targetDate),
     })),
-    auditLogs: (auditLogs as DbAuditLog[]).map((log: DbAuditLog) => ({
+    auditLogs: scopedAuditLogs.map((log: DbAuditLog) => ({
       id: log.id,
       actor: log.actor.name,
       action: log.action,
@@ -348,6 +392,11 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) {
+    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  }
+
   const state = (await request.json()) as AppState;
   const cycle = await prisma.cycle.findFirst({ orderBy: { createdAt: "asc" } });
 
