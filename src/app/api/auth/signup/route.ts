@@ -48,6 +48,10 @@ export async function POST(request: Request) {
     }
 
     const managerEmail = role === "Employee" ? body.managerEmail?.trim().toLowerCase() : "";
+    if (role === "Employee" && !managerEmail) {
+      return NextResponse.json({ error: "Employee signup requires an existing manager email." }, { status: 400 });
+    }
+
     const manager =
       managerEmail
         ? await prisma.user.findUnique({

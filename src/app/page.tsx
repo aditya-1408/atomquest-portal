@@ -2466,7 +2466,7 @@ function LoginScreen({
   const canSubmit =
     mode === "login"
       ? Boolean(email && password)
-      : Boolean(name && email && password && role && department);
+      : Boolean(name && email && password && role && department && (role !== "Employee" || managerEmail));
 
   return (
     <section className="login-shell">
