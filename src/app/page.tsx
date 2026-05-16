@@ -423,9 +423,7 @@ function scoreGoal(goal: Goal, actualValue: number, actualDate: string) {
   if (goal.uomType === "Timeline") {
     return new Date(actualDate) <= new Date(goal.targetDate) ? 100 : 0;
   }
-  if (goal.direction === "Min") return roundedScore((actualValue / goal.targetValue) * 100);
-  if (actualValue === 0) return 100;
-  return roundedScore((goal.targetValue / actualValue) * 100);
+  return roundedScore((actualValue / goal.targetValue) * 100);
 }
 
 function roundedScore(value: number) {
