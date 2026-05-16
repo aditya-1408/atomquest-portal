@@ -80,6 +80,74 @@ type AppState = {
   };
 };
 
+type DbUser = {
+  id: string;
+  name: string;
+  email: string;
+  role: keyof typeof roleFromDb;
+  department: string;
+  managerId: string | null;
+};
+
+type DbGoal = {
+  id: string;
+  employeeId: string;
+  sharedGoalId: string | null;
+  thrustArea: string;
+  title: string;
+  description: string;
+  uomType: keyof typeof uomFromDb;
+  direction: keyof typeof directionFromDb;
+  targetValue: number;
+  targetDate: Date;
+  weightage: number;
+  status: keyof typeof goalStatusFromDb;
+  isLocked: boolean;
+  primaryOwner: boolean;
+};
+
+type DbUpdate = {
+  id: string;
+  goalId: string;
+  quarter: Quarter;
+  actualValue: number;
+  actualDate: Date;
+  status: keyof typeof progressFromDb;
+  employeeComment: string | null;
+  progressScore: number;
+};
+
+type DbCheckIn = {
+  id: string;
+  employeeId: string;
+  managerId: string;
+  quarter: Quarter;
+  comment: string;
+  completedAt: Date;
+};
+
+type DbSharedGoal = {
+  id: string;
+  ownerId: string;
+  title: string;
+  description: string;
+  thrustArea: string;
+  uomType: keyof typeof uomFromDb;
+  direction: keyof typeof directionFromDb;
+  targetValue: number;
+  targetDate: Date;
+};
+
+type DbAuditLog = {
+  id: string;
+  actor: { name: string };
+  action: string;
+  entityId: string;
+  beforeJson: unknown;
+  afterJson: unknown;
+  createdAt: Date;
+};
+
 const roleFromDb = {
   EMPLOYEE: "Employee",
   MANAGER: "Manager",
@@ -176,7 +244,7 @@ export async function GET() {
   }
 
   const state: AppState = {
-    users: users.map((user) => ({
+    users: (users as DbUser[]).map((user: DbUser) => ({
       id: user.id,
       name: user.name,
       email: user.email,
@@ -184,7 +252,7 @@ export async function GET() {
       department: user.department,
       managerId: user.managerId ?? undefined,
     })),
-    goals: goals.map((goal) => ({
+    goals: (goals as DbGoal[]).map((goal: DbGoal) => ({
       id: goal.id,
       employeeId: goal.employeeId,
       thrustArea: goal.thrustArea,
@@ -200,7 +268,7 @@ export async function GET() {
       sharedGoalId: goal.sharedGoalId ?? undefined,
       primaryOwner: goal.primaryOwner,
     })),
-    updates: updates.map((update) => ({
+    updates: (updates as DbUpdate[]).map((update: DbUpdate) => ({
       id: update.id,
       goalId: update.goalId,
       quarter: update.quarter,
@@ -210,7 +278,7 @@ export async function GET() {
       employeeComment: update.employeeComment ?? "",
       progressScore: update.progressScore,
     })),
-    checkIns: checkIns.map((checkIn) => ({
+    checkIns: (checkIns as DbCheckIn[]).map((checkIn: DbCheckIn) => ({
       id: checkIn.id,
       employeeId: checkIn.employeeId,
       managerId: checkIn.managerId,
@@ -218,7 +286,7 @@ export async function GET() {
       comment: checkIn.comment,
       completedAt: dateOnly(checkIn.completedAt),
     })),
-    sharedGoals: sharedGoals.map((goal) => ({
+    sharedGoals: (sharedGoals as DbSharedGoal[]).map((goal: DbSharedGoal) => ({
       id: goal.id,
       ownerId: goal.ownerId,
       title: goal.title,
@@ -229,7 +297,7 @@ export async function GET() {
       targetValue: goal.targetValue,
       targetDate: dateOnly(goal.targetDate),
     })),
-    auditLogs: auditLogs.map((log) => ({
+    auditLogs: (auditLogs as DbAuditLog[]).map((log: DbAuditLog) => ({
       id: log.id,
       actor: log.actor.name,
       action: log.action,
