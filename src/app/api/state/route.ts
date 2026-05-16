@@ -148,6 +148,12 @@ type DbAuditLog = {
   createdAt: Date;
 };
 
+type DbCycle = {
+  id: string;
+  name: string;
+  phase: keyof typeof phaseFromDb;
+};
+
 const roleFromDb = {
   EMPLOYEE: "Employee",
   MANAGER: "Manager",
@@ -239,7 +245,9 @@ export async function GET() {
     }),
   ]);
 
-  if (!cycle) {
+  const activeCycle = cycle as DbCycle | null;
+
+  if (!activeCycle) {
     return NextResponse.json({ error: "No active cycle found. Run prisma db seed first." }, { status: 404 });
   }
 
@@ -307,8 +315,8 @@ export async function GET() {
       createdAt: log.createdAt.toISOString(),
     })),
     cycle: {
-      name: cycle.name,
-      phase: phaseFromDb[cycle.phase],
+      name: activeCycle.name,
+      phase: phaseFromDb[activeCycle.phase],
       windows: defaultWindows,
     },
   };
