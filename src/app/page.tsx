@@ -1193,14 +1193,16 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-3">
             <button
-              className="icon-button"
+              className="header-action-button"
               onClick={reloadDatabaseState}
               title="Refresh database state"
             >
               <RotateCcw size={18} />
+              <span>Refresh</span>
             </button>
-            <button className="icon-button" title="Logout" onClick={logout}>
+            <button className="header-action-button" title="Logout" onClick={logout}>
               <LogOut size={18} />
+              <span>Logout</span>
             </button>
           </div>
         </div>
