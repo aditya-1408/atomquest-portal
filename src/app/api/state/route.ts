@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -332,7 +333,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No active cycle found. Run prisma db seed first." }, { status: 404 });
   }
 
-  await prisma.$transaction(async (tx) => {
+  await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     for (const goal of state.sharedGoals) {
       await tx.sharedGoal.upsert({
         where: { id: goal.id },
