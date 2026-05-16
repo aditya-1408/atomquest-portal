@@ -1,0 +1,204 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  EMPLOYEE
+  MANAGER
+  ADMIN
+}
+
+enum CyclePhase {
+  GOAL_SETTING
+  Q1_CHECK_IN
+  Q2_CHECK_IN
+  Q3_CHECK_IN
+  Q4_ANNUAL
+  CLOSED
+}
+
+enum GoalStatus {
+  DRAFT
+  SUBMITTED
+  APPROVED
+  RETURNED
+}
+
+enum UomType {
+  NUMERIC
+  PERCENTAGE
+  TIMELINE
+  ZERO
+}
+
+enum Direction {
+  MIN
+  MAX
+}
+
+enum ProgressStatus {
+  NOT_STARTED
+  ON_TRACK
+  COMPLETED
+}
+
+enum Quarter {
+  Q1
+  Q2
+  Q3
+  Q4
+}
+
+model User {
+  id                 String           @id @default(cuid())
+  name               String
+  email              String           @unique
+  role               Role
+  department         String
+  passwordHash       String?
+  managerId          String?
+  manager            User?            @relation("ManagerReports", fields: [managerId], references: [id])
+  reports            User[]           @relation("ManagerReports")
+  goals              Goal[]           @relation("EmployeeGoals")
+  submissions        GoalSubmission[]
+  ownedSharedGoals   SharedGoal[]     @relation("SharedGoalOwner")
+  checkInsAsEmployee CheckIn[]        @relation("EmployeeCheckIns")
+  checkInsAsManager  CheckIn[]        @relation("ManagerCheckIns")
+  auditLogs          AuditLog[]       @relation("AuditActor")
+  escalations        EscalationLog[]
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+}
+
+model Cycle {
+  id                  String           @id @default(cuid())
+  name                String
+  year                Int
+  phase               CyclePhase
+  goalSettingOpenDate DateTime
+  q1OpenDate          DateTime
+  q2OpenDate          DateTime
+  q3OpenDate          DateTime
+  q4OpenDate          DateTime
+  status              String           @default("ACTIVE")
+  goals               Goal[]
+  submissions         GoalSubmission[]
+  sharedGoals         SharedGoal[]
+  checkIns            CheckIn[]
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+}
+
+model GoalSubmission {
+  id             String     @id @default(cuid())
+  employeeId     String
+  cycleId        String
+  status         GoalStatus
+  submittedAt    DateTime?
+  approvedAt     DateTime?
+  returnedAt     DateTime?
+  managerComment String?
+  employee       User       @relation(fields: [employeeId], references: [id])
+  cycle          Cycle      @relation(fields: [cycleId], references: [id])
+
+  @@unique([employeeId, cycleId])
+}
+
+model SharedGoal {
+  id          String    @id @default(cuid())
+  ownerId     String
+  cycleId     String
+  department  String
+  thrustArea  String
+  title       String
+  description String
+  uomType     UomType
+  direction   Direction
+  targetValue Float
+  targetDate  DateTime
+  owner       User      @relation("SharedGoalOwner", fields: [ownerId], references: [id])
+  cycle       Cycle     @relation(fields: [cycleId], references: [id])
+  goals       Goal[]
+  createdAt   DateTime  @default(now())
+}
+
+model Goal {
+  id           String            @id @default(cuid())
+  employeeId   String
+  cycleId      String
+  sharedGoalId String?
+  thrustArea   String
+  title        String
+  description  String
+  uomType      UomType
+  direction    Direction
+  targetValue  Float
+  targetDate   DateTime
+  weightage    Int
+  status       GoalStatus
+  isLocked     Boolean           @default(false)
+  primaryOwner Boolean           @default(false)
+  employee     User              @relation("EmployeeGoals", fields: [employeeId], references: [id])
+  cycle        Cycle             @relation(fields: [cycleId], references: [id])
+  sharedGoal   SharedGoal?       @relation(fields: [sharedGoalId], references: [id])
+  updates      QuarterlyUpdate[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+}
+
+model QuarterlyUpdate {
+  id              String         @id @default(cuid())
+  goalId          String
+  quarter         Quarter
+  actualValue     Float
+  actualDate      DateTime
+  status          ProgressStatus
+  progressScore   Int
+  employeeComment String?
+  goal            Goal           @relation(fields: [goalId], references: [id])
+  updatedAt       DateTime       @updatedAt
+
+  @@unique([goalId, quarter])
+}
+
+model CheckIn {
+  id          String   @id @default(cuid())
+  employeeId  String
+  managerId   String
+  cycleId     String
+  quarter     Quarter
+  comment     String
+  completedAt DateTime
+  employee    User     @relation("EmployeeCheckIns", fields: [employeeId], references: [id])
+  manager     User     @relation("ManagerCheckIns", fields: [managerId], references: [id])
+  cycle       Cycle    @relation(fields: [cycleId], references: [id])
+
+  @@unique([employeeId, cycleId, quarter])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String
+  entityType String
+  entityId   String
+  action     String
+  beforeJson Json?
+  afterJson  Json?
+  actor      User     @relation("AuditActor", fields: [actorId], references: [id])
+  createdAt  DateTime @default(now())
+}
+
+model EscalationLog {
+  id         String    @id @default(cuid())
+  userId     String
+  type       String
+  level      Int
+  message    String
+  user       User      @relation(fields: [userId], references: [id])
+  createdAt  DateTime  @default(now())
+  resolvedAt DateTime?
+}

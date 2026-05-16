@@ -94,6 +94,25 @@ type AuditLog = {
   createdAt: string;
 };
 
+type Confirmation = {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  tone?: "default" | "danger";
+  onConfirm: () => void;
+};
+
+type SharedGoalDraft = {
+  title: string;
+  description: string;
+  thrustArea: string;
+  uomType: UomType;
+  direction: Direction;
+  targetValue: number;
+  targetDate: string;
+  weightage: number;
+};
+
 type AppState = {
   users: User[];
   goals: Goal[];
@@ -172,7 +191,7 @@ const seedState = (): AppState => {
       direction: "Min",
       targetValue: 92,
       targetDate: "2026-07-31",
-      weightage: 40,
+      weightage: 35,
       status: "Approved",
       locked: true,
     },
@@ -186,7 +205,7 @@ const seedState = (): AppState => {
       direction: "Max",
       targetValue: 24,
       targetDate: "2026-07-31",
-      weightage: 30,
+      weightage: 25,
       status: "Approved",
       locked: true,
     },
@@ -228,9 +247,41 @@ const seedState = (): AppState => {
       direction: "Min",
       targetValue: 95,
       targetDate: "2026-07-31",
-      weightage: 50,
+      weightage: 40,
       status: "Submitted",
       locked: false,
+    },
+    {
+      id: "g-shared-1-primary",
+      employeeId: "u-employee",
+      thrustArea: "Department KPI",
+      title: "Department service SLA compliance",
+      description: "Maintain SLA adherence across assigned operational queues.",
+      uomType: "Percentage",
+      direction: "Min",
+      targetValue: 95,
+      targetDate: "2026-07-31",
+      weightage: 10,
+      status: "Approved",
+      locked: true,
+      sharedGoalId: "sg-1",
+      primaryOwner: true,
+    },
+    {
+      id: "g-shared-1-recipient",
+      employeeId: "u-employee-2",
+      thrustArea: "Department KPI",
+      title: "Department service SLA compliance",
+      description: "Maintain SLA adherence across assigned operational queues.",
+      uomType: "Percentage",
+      direction: "Min",
+      targetValue: 95,
+      targetDate: "2026-07-31",
+      weightage: 10,
+      status: "Submitted",
+      locked: false,
+      sharedGoalId: "sg-1",
+      primaryOwner: false,
     },
   ];
 
@@ -258,6 +309,26 @@ const seedState = (): AppState => {
         employeeComment: "Need faster closure from field team.",
         progressScore: 86,
       },
+      {
+        id: "up-shared-1-primary",
+        goalId: "g-shared-1-primary",
+        quarter: "Q1",
+        actualValue: 91,
+        actualDate: "2026-07-24",
+        status: "On Track",
+        employeeComment: "Shared SLA is improving across service queues.",
+        progressScore: 96,
+      },
+      {
+        id: "up-shared-1-recipient",
+        goalId: "g-shared-1-recipient",
+        quarter: "Q1",
+        actualValue: 91,
+        actualDate: "2026-07-24",
+        status: "On Track",
+        employeeComment: "Shared SLA is improving across service queues.",
+        progressScore: 96,
+      },
     ],
     checkIns: [
       {
@@ -269,7 +340,19 @@ const seedState = (): AppState => {
         completedAt: "2026-07-25",
       },
     ],
-    sharedGoals: [],
+    sharedGoals: [
+      {
+        id: "sg-1",
+        ownerId: "u-employee",
+        thrustArea: "Department KPI",
+        title: "Department service SLA compliance",
+        description: "Maintain SLA adherence across assigned operational queues.",
+        uomType: "Percentage",
+        direction: "Min",
+        targetValue: 95,
+        targetDate: "2026-07-31",
+      },
+    ],
     auditLogs: [
       {
         id: "a-1",
@@ -312,12 +395,22 @@ function classNames(...classes: Array<string | false | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
+function statusTone(status: GoalStatus) {
+  return {
+    Draft: "status-draft",
+    Submitted: "status-submitted",
+    Approved: "status-approved",
+    Returned: "status-returned",
+  }[status];
+}
+
 export default function Home() {
   const [state, setState] = useState<AppState>(seedState);
   const [activeUserId, setActiveUserId] = useState("u-employee");
   const [view, setView] = useState("Dashboard");
   const [activeEmployeeId, setActiveEmployeeId] = useState("u-employee");
   const [quarter, setQuarter] = useState<Quarter>("Q1");
+  const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -355,7 +448,7 @@ export default function Home() {
     if (activeUser.role === "Employee") return ["Dashboard", "Goals", "Quarterly Update"];
     if (activeUser.role === "Manager")
       return ["Dashboard", "Approvals", "Check-ins", "Shared Goals"];
-    return ["Dashboard", "Users & Cycles", "Reports", "Audit Trail"];
+    return ["Dashboard", "Users & Cycles", "Shared Goals", "Reports", "Audit Trail"];
   }, [activeUser.role]);
 
   const setAndAudit = (updater: (current: AppState) => AppState) => {
@@ -383,6 +476,15 @@ export default function Home() {
       ...current,
       goals: current.goals.map((goal) => (goal.id === goalId ? { ...goal, ...patch } : goal)),
     }));
+  };
+
+  const requestConfirmation = (nextConfirmation: Confirmation) => {
+    setConfirmation(nextConfirmation);
+  };
+
+  const confirmPendingAction = () => {
+    confirmation?.onConfirm();
+    setConfirmation(null);
   };
 
   const validation = validateGoals(ownGoals);
@@ -521,18 +623,19 @@ export default function Home() {
     });
   };
 
-  const pushSharedGoal = () => {
-    const teamIds = team.map((member) => member.id);
+  const pushSharedGoal = (draft: SharedGoalDraft) => {
+    const recipients = activeUser.role === "Manager" ? team : employees;
+    const teamIds = recipients.map((member) => member.id);
     const shared: SharedGoal = {
       id: crypto.randomUUID(),
       ownerId: teamIds[0] ?? "u-employee",
-      thrustArea: "Department KPI",
-      title: "Department service SLA compliance",
-      description: "Maintain SLA adherence across all assigned operational queues.",
-      uomType: "Percentage",
-      direction: "Min",
-      targetValue: 95,
-      targetDate: "2026-07-31",
+      thrustArea: draft.thrustArea,
+      title: draft.title,
+      description: draft.description,
+      uomType: draft.uomType,
+      direction: draft.direction,
+      targetValue: draft.targetValue,
+      targetDate: draft.targetDate,
     };
     const linkedGoals: Goal[] = teamIds.map((employeeId, index) => ({
       id: crypto.randomUUID(),
@@ -544,7 +647,7 @@ export default function Home() {
       direction: shared.direction,
       targetValue: shared.targetValue,
       targetDate: shared.targetDate,
-      weightage: 10,
+      weightage: draft.weightage,
       status: "Draft",
       locked: false,
       sharedGoalId: shared.id,
@@ -558,7 +661,7 @@ export default function Home() {
           goals: [...current.goals, ...linkedGoals],
         },
         "Pushed shared departmental KPI",
-        "Operations team",
+        activeUser.role === "Manager" ? "Operations team" : "All employees",
       ),
     );
   };
@@ -651,7 +754,19 @@ export default function Home() {
                 </option>
               ))}
             </select>
-            <button className="icon-button" onClick={resetDemo} title="Reset seeded demo data">
+            <button
+              className="icon-button"
+              onClick={() =>
+                requestConfirmation({
+                  title: "Reset Demo Data",
+                  message: "This restores the seeded scenario and clears local changes in this browser.",
+                  confirmLabel: "Reset demo",
+                  tone: "danger",
+                  onConfirm: resetDemo,
+                })
+              }
+              title="Reset seeded demo data"
+            >
               <RotateCcw size={18} />
             </button>
             <button className="icon-button" title="Demo logout">
@@ -732,8 +847,22 @@ export default function Home() {
               setActiveEmployeeId={setActiveEmployeeId}
               goals={employeeGoals}
               updateGoal={updateGoal}
-              approveGoals={approveGoals}
-              returnGoals={returnGoals}
+              approveGoals={() =>
+                requestConfirmation({
+                  title: "Approve Goal Sheet",
+                  message: `Approve and lock ${selectedEmployee.name}'s goal sheet? Employee edits will stop until an Admin unlocks it.`,
+                  confirmLabel: "Approve & lock",
+                  onConfirm: approveGoals,
+                })
+              }
+              returnGoals={(comment) =>
+                requestConfirmation({
+                  title: "Return For Rework",
+                  message: `Return ${selectedEmployee.name}'s sheet with your manager comment? They can edit and resubmit after this.`,
+                  confirmLabel: "Return sheet",
+                  onConfirm: () => returnGoals(comment),
+                })
+              }
             />
           )}
 
@@ -751,12 +880,38 @@ export default function Home() {
             />
           )}
 
-          {activeUser.role === "Manager" && view === "Shared Goals" && (
-            <SharedGoals state={state} team={team} pushSharedGoal={pushSharedGoal} />
+          {(activeUser.role === "Manager" || activeUser.role === "Admin") && view === "Shared Goals" && (
+            <SharedGoals
+              state={state}
+              recipients={activeUser.role === "Manager" ? team : employees}
+              pushSharedGoal={(draft) =>
+                requestConfirmation({
+                  title: "Push Shared KPI",
+                  message:
+                    activeUser.role === "Manager"
+                      ? "Create linked shared KPI goals for every employee in this manager's team."
+                      : "Create linked shared KPI goals for all employees in the portal.",
+                  confirmLabel: "Push KPI",
+                  onConfirm: () => pushSharedGoal(draft),
+                })
+              }
+            />
           )}
 
           {activeUser.role === "Admin" && view === "Users & Cycles" && (
-            <AdminUsers state={state} unlockEmployee={unlockEmployee} />
+            <AdminUsers
+              state={state}
+              unlockEmployee={(employeeId) => {
+                const employee = state.users.find((user) => user.id === employeeId);
+                requestConfirmation({
+                  title: "Unlock Goal Sheet",
+                  message: `Unlock ${employee?.name ?? "this employee"}'s goals for exception handling? The sheet will return to employee rework state.`,
+                  confirmLabel: "Unlock sheet",
+                  tone: "danger",
+                  onConfirm: () => unlockEmployee(employeeId),
+                });
+              }}
+            />
           )}
 
           {activeUser.role === "Admin" && view === "Reports" && (
@@ -768,6 +923,14 @@ export default function Home() {
           )}
         </section>
       </div>
+
+      {confirmation && (
+        <ConfirmationDialog
+          confirmation={confirmation}
+          onCancel={() => setConfirmation(null)}
+          onConfirm={confirmPendingAction}
+        />
+      )}
     </main>
   );
 }
@@ -933,7 +1096,7 @@ function EmployeeGoals({
             <div key={goal.id} className="goal-card">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <span className="status-badge">{goal.status}</span>
+                  <span className={classNames("status-badge", statusTone(goal.status))}>{goal.status}</span>
                   {goal.locked && <span className="ml-2 status-badge"><Lock size={12} /> Locked</span>}
                   {goal.sharedGoalId && <span className="ml-2 status-badge"><Share2 size={12} /> Shared KPI</span>}
                 </div>
@@ -1080,7 +1243,7 @@ function ManagerApprovals(props: {
               <div>
                 <p className="font-semibold">{goal.title}</p>
                 <p className="text-sm text-slate-600">{goal.description}</p>
-                <span className="status-badge mt-2">{goal.status}</span>
+                <span className={classNames("status-badge mt-2", statusTone(goal.status))}>{goal.status}</span>
               </div>
               <Field label="Target">
                 <input type="number" value={goal.targetValue} disabled={!canReview || goal.locked || goal.uomType === "Timeline"} onChange={(e) => props.updateGoal(goal.id, { targetValue: Number(e.target.value) })} />
@@ -1156,19 +1319,77 @@ function ManagerCheckIns(props: {
   );
 }
 
-function SharedGoals({ state, team, pushSharedGoal }: { state: AppState; team: User[]; pushSharedGoal: () => void }) {
+function SharedGoals({
+  state,
+  recipients,
+  pushSharedGoal,
+}: {
+  state: AppState;
+  recipients: User[];
+  pushSharedGoal: (draft: SharedGoalDraft) => void;
+}) {
+  const [draft, setDraft] = useState<SharedGoalDraft>({
+    thrustArea: "Department KPI",
+    title: "Department service SLA compliance",
+    description: "Maintain SLA adherence across all assigned operational queues.",
+    uomType: "Percentage",
+    direction: "Min",
+    targetValue: 95,
+    targetDate: "2026-07-31",
+    weightage: 10,
+  });
+  const canPush = draft.title.trim().length > 0 && draft.weightage >= 10 && draft.weightage <= 100 && recipients.length > 0;
+
   return (
     <Panel
       title="Shared Departmental Goals"
-      actions={<button className="primary-button" onClick={pushSharedGoal}><Share2 size={17} /> Push KPI to team</button>}
+      actions={
+        <button className="primary-button" disabled={!canPush} onClick={() => pushSharedGoal(draft)}>
+          <Share2 size={17} /> Push KPI
+        </button>
+      }
     >
-      <p className="mb-4 text-sm text-slate-600">Shared goal title and target stay read-only for recipients; only weightage remains adjustable.</p>
+      <p className="mb-4 text-sm text-slate-600">Shared goal title and target stay read-only for recipients; only weightage remains adjustable before submission.</p>
+      <div className="form-grid mb-5">
+        <Field label="Thrust Area">
+          <input value={draft.thrustArea} onChange={(e) => setDraft({ ...draft, thrustArea: e.target.value })} />
+        </Field>
+        <Field label="Goal Title">
+          <input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
+        </Field>
+        <Field label="Description">
+          <textarea value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} />
+        </Field>
+        <Field label="UoM">
+          <select value={draft.uomType} onChange={(e) => setDraft({ ...draft, uomType: e.target.value as UomType })}>
+            <option>Numeric</option>
+            <option>Percentage</option>
+            <option>Timeline</option>
+            <option>Zero</option>
+          </select>
+        </Field>
+        <Field label="Direction">
+          <select value={draft.direction} disabled={draft.uomType === "Zero"} onChange={(e) => setDraft({ ...draft, direction: e.target.value as Direction })}>
+            <option value="Min">Higher is better</option>
+            <option value="Max">Lower is better</option>
+          </select>
+        </Field>
+        <Field label="Target">
+          <input type="number" value={draft.targetValue} disabled={draft.uomType === "Timeline" || draft.uomType === "Zero"} onChange={(e) => setDraft({ ...draft, targetValue: Number(e.target.value) })} />
+        </Field>
+        <Field label="Deadline">
+          <input type="date" value={draft.targetDate} onChange={(e) => setDraft({ ...draft, targetDate: e.target.value })} />
+        </Field>
+        <Field label="Recipient Weightage">
+          <input type="number" min={10} max={100} value={draft.weightage} onChange={(e) => setDraft({ ...draft, weightage: Number(e.target.value) })} />
+        </Field>
+      </div>
       <div className="grid gap-3 md:grid-cols-2">
         {state.sharedGoals.map((goal) => (
           <div className="text-card" key={goal.id}>
             <p className="font-semibold">{goal.title}</p>
             <p className="text-sm text-slate-600">{goal.description}</p>
-            <p className="mt-2 text-xs text-slate-500">Target {goal.targetValue}% | Recipients {team.length}</p>
+            <p className="mt-2 text-xs text-slate-500">Target {goal.uomType === "Timeline" ? goal.targetDate : goal.targetValue} | Current recipients {state.goals.filter((item) => item.sharedGoalId === goal.id).length}</p>
           </div>
         ))}
         {state.sharedGoals.length === 0 && <Empty text="No shared KPIs yet. Push one for the demo." />}
@@ -1355,4 +1576,36 @@ function QuarterSelect({ quarter, setQuarter }: { quarter: Quarter; setQuarter: 
 
 function Empty({ text }: { text: string }) {
   return <div className="rounded-md border border-dashed border-slate-300 p-5 text-sm text-slate-500">{text}</div>;
+}
+
+function ConfirmationDialog({
+  confirmation,
+  onCancel,
+  onConfirm,
+}: {
+  confirmation: Confirmation;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <section className="modal-panel" role="dialog" aria-modal="true" aria-labelledby="confirmation-title">
+        <h2 id="confirmation-title" className="text-lg font-semibold">
+          {confirmation.title}
+        </h2>
+        <p className="mt-2 text-sm text-slate-600">{confirmation.message}</p>
+        <div className="mt-5 flex flex-wrap justify-end gap-2">
+          <button className="secondary-button" onClick={onCancel}>
+            Cancel
+          </button>
+          <button
+            className={classNames("primary-button", confirmation.tone === "danger" && "danger-button")}
+            onClick={onConfirm}
+          >
+            {confirmation.confirmLabel}
+          </button>
+        </div>
+      </section>
+    </div>
+  );
 }

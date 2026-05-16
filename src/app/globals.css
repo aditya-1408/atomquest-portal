@@ -229,6 +229,11 @@ td {
   background: #1d4ed8;
 }
 
+.danger-button,
+.danger-button:hover {
+  background: #dc2626;
+}
+
 .secondary-button {
   background: white;
   border: 1px solid #cbd5e1;
@@ -265,9 +270,50 @@ td {
   color: #475569;
 }
 
+.status-draft {
+  background: #f8fafc;
+  color: #475569;
+}
+
+.status-submitted {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+.status-approved {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.status-returned {
+  background: #fffbeb;
+  color: #92400e;
+}
+
 .score-pill {
   background: #ecfdf5;
   color: #047857;
+}
+
+.modal-backdrop {
+  align-items: center;
+  background: rgba(15, 23, 42, 0.42);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 1rem;
+  position: fixed;
+  z-index: 50;
+}
+
+.modal-panel {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
+  max-width: 28rem;
+  padding: 1.2rem;
+  width: 100%;
 }
 
 .alert {
