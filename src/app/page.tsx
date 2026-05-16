@@ -423,14 +423,14 @@ function scoreGoal(goal: Goal, actualValue: number, actualDate: string) {
   if (goal.uomType === "Timeline") {
     return new Date(actualDate) <= new Date(goal.targetDate) ? 100 : 0;
   }
-  if (goal.direction === "Min") return safeClamp((actualValue / goal.targetValue) * 100);
+  if (goal.direction === "Min") return roundedScore((actualValue / goal.targetValue) * 100);
   if (actualValue === 0) return 100;
-  return safeClamp((goal.targetValue / actualValue) * 100);
+  return roundedScore((goal.targetValue / actualValue) * 100);
 }
 
-function safeClamp(value: number) {
+function roundedScore(value: number) {
   if (!Number.isFinite(value)) return 0;
-  return Math.max(0, Math.min(100, Math.round(value)));
+  return Math.max(0, Math.round(value));
 }
 
 function classNames(...classes: Array<string | false | undefined>) {
@@ -1839,13 +1839,14 @@ function ManagerCheckIns(props: {
           <tbody>
             {approvedGoals.map((goal) => {
               const update = props.updates.find((item) => item.goalId === goal.id && item.quarter === props.quarter);
+              const progress = update ? scoreGoal(goal, update.actualValue, update.actualDate) : null;
               return (
                 <tr key={goal.id}>
                   <td>{goal.title}</td>
                   <td>{goal.uomType === "Timeline" ? goal.targetDate : goal.targetValue}</td>
-                  <td>{update?.actualValue ?? "Pending"}</td>
+                  <td>{update ? (goal.uomType === "Timeline" ? update.actualDate : update.actualValue) : "Pending"}</td>
                   <td>{update?.status ?? "Not updated"}</td>
-                  <td>{update ? `${update.progressScore}%` : "-"}</td>
+                  <td>{progress !== null ? `${progress}%` : "-"}</td>
                 </tr>
               );
             })}
