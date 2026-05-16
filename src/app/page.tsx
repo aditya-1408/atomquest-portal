@@ -756,12 +756,28 @@ export default function Home() {
       | "GOAL_APPROVED"
       | "GOAL_RETURNED"
       | "CHECK_IN_COMPLETED"
-      | "CYCLE_PHASE_CHANGED"
-      | "TEST_NOTIFICATION";
+      | "CYCLE_PHASE_CHANGED";
     employeeId?: string;
     managerId?: string;
     phase?: string;
     comment?: string;
+    goalSummary?: Array<{
+      title: string;
+      thrustArea: string;
+      uomType: string;
+      target: string;
+      weightage: number;
+    }>;
+    updateSummary?: {
+      title: string;
+      thrustArea: string;
+      target: string;
+      actual: string;
+      status: string;
+      progressScore: number;
+      quarter: string;
+      comment?: string;
+    };
   }) => {
     fetch("/api/notifications", {
       method: "POST",
@@ -880,7 +896,18 @@ export default function Home() {
         activeUser.name,
       ),
     );
-    notifyWorkflow({ event: "GOAL_SUBMITTED", employeeId: activeUser.id, managerId: activeUser.managerId });
+    notifyWorkflow({
+      event: "GOAL_SUBMITTED",
+      employeeId: activeUser.id,
+      managerId: activeUser.managerId,
+      goalSummary: ownGoals.map((goal) => ({
+        title: goal.title,
+        thrustArea: goal.thrustArea,
+        uomType: goal.uomType,
+        target: goal.uomType === "Timeline" ? goal.targetDate : String(goal.targetValue),
+        weightage: goal.weightage,
+      })),
+    });
   };
 
   const approveGoals = () => {
@@ -983,7 +1010,21 @@ export default function Home() {
       );
     });
     const employee = state.users.find((user) => user.id === goal.employeeId);
-    notifyWorkflow({ event: "GOAL_UPDATED", employeeId: goal.employeeId, managerId: employee?.managerId });
+    notifyWorkflow({
+      event: "GOAL_UPDATED",
+      employeeId: goal.employeeId,
+      managerId: employee?.managerId,
+      updateSummary: {
+        title: goal.title,
+        thrustArea: goal.thrustArea,
+        target: goal.uomType === "Timeline" ? goal.targetDate : String(goal.targetValue),
+        actual: goal.uomType === "Timeline" ? actualDate : String(actualValue),
+        status,
+        progressScore,
+        quarter,
+        comment,
+      },
+    });
   };
 
   const completeCheckIn = (comment: string) => {
@@ -1152,13 +1193,6 @@ export default function Home() {
             <h1 className="text-xl font-semibold">Goal Setting & Tracking Portal</h1>
           </div>
           <div className="flex items-center gap-3">
-            <button
-              className="secondary-button"
-              onClick={() => notifyWorkflow({ event: "TEST_NOTIFICATION" })}
-              title="Send test email and Teams notification"
-            >
-              Test notification
-            </button>
             <button
               className="icon-button"
               onClick={reloadDatabaseState}

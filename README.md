@@ -161,7 +161,7 @@ Implemented notification events:
 - Check-in completed -> employee and manager email/card.
 - Cycle phase changed -> all users email/card.
 - Weekly check-in reminders -> employee and manager email/card.
-- Header `Test notification` button -> signed-in user email/card for configuration testing.
+For no-domain Resend demos, create the manager account using your Resend account Gmail. Employees who sign up with that manager email will route submission and achievement-update emails to that manager inbox.
 
 ## Future Enterprise Upgrade Path
 
