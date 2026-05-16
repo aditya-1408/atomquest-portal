@@ -406,7 +406,7 @@ function statusTone(status: GoalStatus) {
 
 export default function Home() {
   const [state, setState] = useState<AppState>(seedState);
-  const [activeUserId, setActiveUserId] = useState("u-employee");
+  const [activeUserId, setActiveUserId] = useState("");
   const [view, setView] = useState("Dashboard");
   const [activeEmployeeId, setActiveEmployeeId] = useState("u-employee");
   const [quarter, setQuarter] = useState<Quarter>("Q1");
@@ -414,6 +414,10 @@ export default function Home() {
   const [hasLoadedDatabase, setHasLoadedDatabase] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [loginEmail, setLoginEmail] = useState("employee@atomquest.demo");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -423,9 +427,13 @@ export default function Home() {
         if (!response.ok) throw new Error("Could not load database state.");
         const databaseState = (await response.json()) as AppState;
         if (cancelled) return;
+        const savedUserId = window.sessionStorage.getItem("atomquest-user-id");
+        const savedUser = databaseState.users.find((user) => user.id === savedUserId);
         setState(databaseState);
-        setActiveUserId(databaseState.users.find((user) => user.role === "Employee")?.id ?? databaseState.users[0]?.id ?? "u-employee");
-        setActiveEmployeeId(databaseState.users.find((user) => user.role === "Employee")?.id ?? "u-employee");
+        if (savedUser) {
+          setActiveUserId(savedUser.id);
+          setActiveEmployeeId(savedUser.role === "Employee" ? savedUser.id : databaseState.users.find((user) => user.role === "Employee")?.id ?? "u-employee");
+        }
         setHasLoadedDatabase(true);
         setLoadError("");
       } catch (error) {
@@ -459,15 +467,18 @@ export default function Home() {
     return () => window.clearTimeout(timer);
   }, [hasLoadedDatabase, state]);
 
-  const activeUser = state.users.find((user) => user.id === activeUserId)!;
+  const activeUser = state.users.find((user) => user.id === activeUserId);
   const employees = state.users.filter((user) => user.role === "Employee");
-  const team = employees.filter((employee) => employee.managerId === activeUser.id);
+  const team = activeUser ? employees.filter((employee) => employee.managerId === activeUser.id) : [];
   const selectedEmployee =
     state.users.find((user) => user.id === activeEmployeeId) ?? employees[0];
   const employeeGoals = state.goals.filter((goal) => goal.employeeId === selectedEmployee.id);
-  const ownGoals = state.goals.filter((goal) => goal.employeeId === activeUser.id);
-  const switchUser = (userId: string) => {
-    const user = state.users.find((candidate) => candidate.id === userId)!;
+  const ownGoals = activeUser ? state.goals.filter((goal) => goal.employeeId === activeUser.id) : [];
+
+  const completeLogin = (userId: string) => {
+    const user = state.users.find((candidate) => candidate.id === userId);
+    if (!user) return;
+    window.sessionStorage.setItem("atomquest-user-id", user.id);
     setActiveUserId(user.id);
     setView("Dashboard");
     if (user.role === "Employee") setActiveEmployeeId(user.id);
@@ -479,12 +490,40 @@ export default function Home() {
     }
   };
 
+  const login = async () => {
+    setIsLoggingIn(true);
+    setLoginError("");
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: loginEmail.trim(), password: loginPassword }),
+      });
+      const result = (await response.json()) as { userId?: string; error?: string };
+      if (!response.ok || !result.userId) throw new Error(result.error ?? "Login failed.");
+      completeLogin(result.userId);
+      setLoginPassword("");
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : "Login failed.");
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const logout = () => {
+    window.sessionStorage.removeItem("atomquest-user-id");
+    setActiveUserId("");
+    setView("Dashboard");
+    setLoginPassword("");
+  };
+
   const nav = useMemo(() => {
+    if (!activeUser) return [];
     if (activeUser.role === "Employee") return ["Dashboard", "Goals", "Quarterly Update"];
     if (activeUser.role === "Manager")
       return ["Dashboard", "Approvals", "Check-ins", "Shared Goals"];
     return ["Dashboard", "Users & Cycles", "Shared Goals", "Reports", "Audit Trail"];
-  }, [activeUser.role]);
+  }, [activeUser]);
 
   const setAndAudit = (updater: (current: AppState) => AppState) => {
     setState((current) => updater(current));
@@ -495,7 +534,7 @@ export default function Home() {
     auditLogs: [
       {
         id: crypto.randomUUID(),
-        actor: activeUser.name,
+        actor: activeUser?.name ?? "System",
         action,
         entity,
         before,
@@ -525,6 +564,7 @@ export default function Home() {
   const validation = validateGoals(ownGoals);
 
   const submitGoals = () => {
+    if (!activeUser) return;
     if (!validation.ok) return;
     setAndAudit((current) =>
       addAudit(
@@ -541,6 +581,7 @@ export default function Home() {
   };
 
   const approveGoals = () => {
+    if (!activeUser) return;
     setAndAudit((current) =>
       addAudit(
         {
@@ -558,6 +599,7 @@ export default function Home() {
   };
 
   const returnGoals = (comment: string) => {
+    if (!activeUser) return;
     setAndAudit((current) =>
       addAudit(
         {
@@ -577,6 +619,7 @@ export default function Home() {
   };
 
   const unlockEmployee = (employeeId: string) => {
+    if (!activeUser) return;
     const employee = state.users.find((user) => user.id === employeeId);
     setAndAudit((current) =>
       addAudit(
@@ -593,6 +636,7 @@ export default function Home() {
   };
 
   const saveUpdate = (goal: Goal, actualValue: number, actualDate: string, status: ProgressStatus, comment: string) => {
+    if (!activeUser) return;
     const progressScore = scoreGoal(goal, actualValue, actualDate);
     setAndAudit((current) => {
       const existing = current.updates.find(
@@ -633,6 +677,7 @@ export default function Home() {
   };
 
   const completeCheckIn = (comment: string) => {
+    if (!activeUser) return;
     setAndAudit((current) => {
       const others = current.checkIns.filter(
         (checkIn) => !(checkIn.employeeId === selectedEmployee.id && checkIn.quarter === quarter),
@@ -659,6 +704,7 @@ export default function Home() {
   };
 
   const pushSharedGoal = (draft: SharedGoalDraft) => {
+    if (!activeUser) return;
     const recipients = activeUser.role === "Manager" ? team : employees;
     const teamIds = recipients.map((member) => member.id);
     const shared: SharedGoal = {
@@ -696,7 +742,7 @@ export default function Home() {
           goals: [...current.goals, ...linkedGoals],
         },
         "Pushed shared departmental KPI",
-        activeUser.role === "Manager" ? "Operations team" : "All employees",
+        activeUser?.role === "Manager" ? "Operations team" : "All employees",
       ),
     );
   };
@@ -762,6 +808,21 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#f6f7f9] text-slate-950">
+      {!activeUser && (
+        <LoginScreen
+          users={state.users}
+          email={loginEmail}
+          password={loginPassword}
+          error={loginError || loadError}
+          isLoading={!hasLoadedDatabase || isLoggingIn}
+          setEmail={setLoginEmail}
+          setPassword={setLoginPassword}
+          login={login}
+        />
+      )}
+
+      {activeUser && (
+        <>
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4">
           <div>
@@ -769,30 +830,6 @@ export default function Home() {
             <h1 className="text-xl font-semibold">Goal Setting & Tracking Portal</h1>
           </div>
           <div className="flex items-center gap-3">
-            <div className="persona-switcher">
-              {state.users.map((user) => (
-                <button
-                  key={user.id}
-                  className={classNames("persona-button", activeUserId === user.id && "persona-button-active")}
-                  onClick={() => switchUser(user.id)}
-                  title={user.email}
-                >
-                  {user.role === "Employee" ? user.name.split(" ")[0] : user.role}
-                </button>
-              ))}
-            </div>
-            <select
-              className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-              value={activeUserId}
-              onChange={(event) => switchUser(event.target.value)}
-              onInput={(event) => switchUser(event.currentTarget.value)}
-            >
-              {state.users.map((user) => (
-                <option key={user.id} value={user.id}>
-                  {user.role}: {user.name}
-                </option>
-              ))}
-            </select>
             <button
               className="icon-button"
               onClick={() =>
@@ -808,7 +845,7 @@ export default function Home() {
             >
               <RotateCcw size={18} />
             </button>
-            <button className="icon-button" title="Demo logout">
+            <button className="icon-button" title="Logout" onClick={logout}>
               <LogOut size={18} />
             </button>
           </div>
@@ -976,6 +1013,8 @@ export default function Home() {
           onCancel={() => setConfirmation(null)}
           onConfirm={confirmPendingAction}
         />
+      )}
+      </>
       )}
     </main>
   );
@@ -1622,6 +1661,72 @@ function QuarterSelect({ quarter, setQuarter }: { quarter: Quarter; setQuarter: 
 
 function Empty({ text }: { text: string }) {
   return <div className="rounded-md border border-dashed border-slate-300 p-5 text-sm text-slate-500">{text}</div>;
+}
+
+function LoginScreen({
+  users,
+  email,
+  password,
+  error,
+  isLoading,
+  setEmail,
+  setPassword,
+  login,
+}: {
+  users: User[];
+  email: string;
+  password: string;
+  error: string;
+  isLoading: boolean;
+  setEmail: (email: string) => void;
+  setPassword: (password: string) => void;
+  login: () => void;
+}) {
+  return (
+    <section className="login-shell">
+      <div className="login-panel">
+        <p className="eyebrow">AtomQuest 1.0</p>
+        <h1>Goal Setting & Tracking Portal</h1>
+        <p className="muted">Sign in with the demo credentials assigned for your role.</p>
+
+        <div className="mt-6 grid gap-4">
+          <Field label="Email">
+            <input
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              placeholder="employee@atomquest.demo"
+              autoComplete="email"
+            />
+          </Field>
+          <Field label="Password">
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" && email && password) login();
+              }}
+              placeholder="Enter demo password"
+              autoComplete="current-password"
+            />
+          </Field>
+          {error && <div className="alert">{error}</div>}
+          <button className="primary-button" disabled={isLoading || !email || !password} onClick={login}>
+            {isLoading ? "Please wait..." : "Login"}
+          </button>
+        </div>
+
+        <div className="mt-6 grid gap-2">
+          {users.map((user) => (
+            <button key={user.id} className="login-persona" onClick={() => setEmail(user.email)}>
+              <span>{user.role}</span>
+              <strong>{user.email}</strong>
+            </button>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
 }
 
 function ConfirmationDialog({
