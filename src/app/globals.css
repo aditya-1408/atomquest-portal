@@ -1,8 +1,16 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f6f7f9;
+  --background: #eef3f0;
   --foreground: #0f172a;
+  --line: rgba(94, 112, 104, 0.22);
+  --panel: rgba(255, 255, 255, 0.9);
+  --panel-strong: rgba(255, 255, 255, 0.96);
+  --shadow-soft: 0 22px 70px rgba(15, 23, 42, 0.11);
+  --shadow-card: 0 14px 34px rgba(15, 23, 42, 0.07);
+  --blue: #2563eb;
+  --green: #059669;
+  --ink: #102033;
 }
 
 @theme inline {
@@ -17,7 +25,10 @@
 }
 
 body {
-  background: var(--background);
+  background:
+    linear-gradient(180deg, rgba(248, 250, 252, 0.82), rgba(236, 245, 240, 0.92)),
+    url("/bg2_warm_slate.svg") center / cover fixed,
+    var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
@@ -33,12 +44,21 @@ input,
 select,
 textarea {
   width: 100%;
-  border: 1px solid #cbd5e1;
+  border: 1px solid rgba(148, 163, 184, 0.72);
   border-radius: 6px;
-  background: white;
+  background: rgba(255, 255, 255, 0.94);
   padding: 0.58rem 0.7rem;
   color: #0f172a;
   outline: none;
+  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  background: white;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.13);
 }
 
 textarea {
@@ -63,8 +83,8 @@ table {
 }
 
 th {
-  background: #f1f5f9;
-  color: #475569;
+  background: linear-gradient(180deg, #eef4f8, #e8eff5);
+  color: #334155;
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -94,7 +114,7 @@ td {
 }
 
 .eyebrow {
-  color: #2563eb;
+  color: #1d4ed8;
   font-size: 0.76rem;
   font-weight: 800;
   letter-spacing: 0.16em;
@@ -106,34 +126,107 @@ td {
   font-size: 0.92rem;
 }
 
+.app-shell {
+  background:
+    linear-gradient(180deg, rgba(244, 247, 249, 0.9), rgba(235, 244, 240, 0.94)),
+    url("/bg4_deep_indigo.svg") right top / 54rem auto no-repeat fixed,
+    url("/bg2_warm_slate.svg") left bottom / cover no-repeat fixed,
+    #eef3f0;
+  position: relative;
+}
+
+.app-shell::before {
+  background: url("/bg3_emerald_ops.svg") left 8rem / 46rem auto no-repeat;
+  content: "";
+  inset: 0;
+  opacity: 0.2;
+  pointer-events: none;
+  position: fixed;
+}
+
+.app-header {
+  backdrop-filter: blur(16px);
+  background: rgba(255, 255, 255, 0.86);
+  border-bottom: 1px solid rgba(203, 213, 225, 0.72);
+  box-shadow: 0 8px 26px rgba(15, 23, 42, 0.06);
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.app-layout,
+.app-header > div {
+  position: relative;
+  z-index: 1;
+}
+
+.app-sidebar {
+  backdrop-filter: blur(14px);
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(203, 213, 225, 0.68);
+  border-radius: 8px;
+  box-shadow: var(--shadow-card);
+}
+
+.user-card,
+.sync-banner {
+  background: rgba(255, 255, 255, 0.76);
+  border: 1px solid rgba(203, 213, 225, 0.74);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.055);
+}
+
+.sync-banner {
+  backdrop-filter: blur(12px);
+}
+
 .login-shell {
   align-items: center;
-  display: flex;
+  background:
+    linear-gradient(90deg, rgba(4, 47, 46, 0.76), rgba(15, 23, 42, 0.28) 44%, rgba(244, 247, 246, 0.9) 58%),
+    url("/atomquest_bg_sideloaded.svg") left center / cover no-repeat,
+    url("/bg3_emerald_ops.svg") center / cover no-repeat;
+  display: grid;
+  gap: clamp(1.5rem, 4vw, 4rem);
+  grid-template-columns: minmax(0, 1fr) minmax(22rem, 30rem);
   min-height: 100vh;
-  padding: 1.25rem;
+  overflow: hidden;
+  padding: clamp(1rem, 4vw, 4rem);
+  position: relative;
+}
+
+.login-shell::before {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0));
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
 }
 
 .login-panel {
-  background: white;
-  border: 1px solid #e2e8f0;
+  backdrop-filter: blur(18px);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.78);
   border-radius: 8px;
-  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.08);
-  margin: 0 auto;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.22);
+  justify-self: end;
   max-width: 30rem;
-  padding: 1.5rem;
+  padding: clamp(1.15rem, 3vw, 1.7rem);
+  position: relative;
   width: 100%;
+  z-index: 1;
 }
 
 .login-panel h1 {
-  font-size: 1.7rem;
+  color: #07111f;
+  font-size: 1.8rem;
   font-weight: 700;
   letter-spacing: 0;
   margin: 0.25rem 0 0.45rem;
 }
 
 .auth-tabs {
-  background: #f1f5f9;
-  border: 1px solid #e2e8f0;
+  background: rgba(226, 232, 240, 0.62);
+  border: 1px solid rgba(203, 213, 225, 0.78);
   border-radius: 8px;
   display: grid;
   gap: 0.2rem;
@@ -150,7 +243,8 @@ td {
 }
 
 .auth-tabs .auth-tab-active {
-  background: #2563eb;
+  background: linear-gradient(135deg, #2563eb, #059669);
+  box-shadow: 0 8px 22px rgba(37, 99, 235, 0.22);
   color: white;
 }
 
@@ -189,14 +283,15 @@ td {
   justify-content: flex-start;
   padding: 0.72rem 0.8rem;
   text-align: left;
-  transition: background 120ms ease, color 120ms ease;
+  transition: background 120ms ease, color 120ms ease, transform 120ms ease;
   width: 100%;
 }
 
 .nav-button:hover,
 .nav-button-active {
-  background: #eff6ff;
+  background: linear-gradient(90deg, rgba(37, 99, 235, 0.12), rgba(5, 150, 105, 0.08));
   color: #1d4ed8;
+  transform: translateX(2px);
 }
 
 .persona-switcher {
@@ -223,18 +318,21 @@ td {
 }
 
 .panel {
-  background: white;
-  border: 1px solid #e2e8f0;
+  backdrop-filter: blur(12px);
+  background: var(--panel-strong);
+  border: 1px solid rgba(203, 213, 225, 0.72);
   border-radius: 8px;
-  padding: 1.1rem;
+  box-shadow: var(--shadow-card);
+  padding: 1.15rem;
 }
 
 .metric-card,
 .text-card,
 .goal-card {
-  background: white;
-  border: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(203, 213, 225, 0.72);
   border-radius: 8px;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.055);
 }
 
 .metric-card {
@@ -243,9 +341,9 @@ td {
 
 .metric-icon {
   align-items: center;
-  background: #eff6ff;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(5, 150, 105, 0.14));
   border-radius: 6px;
-  color: #2563eb;
+  color: #047857;
   display: inline-flex;
   height: 2.2rem;
   justify-content: center;
@@ -288,18 +386,20 @@ td {
   font-weight: 700;
   gap: 0.45rem;
   justify-content: center;
-  transition: transform 120ms ease, background 120ms ease, border 120ms ease;
+  transition: transform 120ms ease, background 120ms ease, border 120ms ease, box-shadow 120ms ease;
 }
 
 .primary-button {
-  background: #2563eb;
+  background: linear-gradient(135deg, #2563eb, #0f9f82);
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.2);
   color: white;
   min-height: 2.45rem;
   padding: 0.58rem 0.88rem;
 }
 
 .primary-button:hover {
-  background: #1d4ed8;
+  background: linear-gradient(135deg, #1d4ed8, #047857);
+  transform: translateY(-1px);
 }
 
 .danger-button,
@@ -308,7 +408,7 @@ td {
 }
 
 .secondary-button {
-  background: white;
+  background: rgba(255, 255, 255, 0.9);
   border: 1px solid #cbd5e1;
   color: #334155;
   min-height: 2.45rem;
@@ -317,14 +417,22 @@ td {
 
 .secondary-button:hover {
   border-color: #94a3b8;
-  background: #f8fafc;
+  background: white;
+  transform: translateY(-1px);
 }
 
 .icon-button {
-  border: 1px solid #cbd5e1;
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(203, 213, 225, 0.82);
   color: #334155;
   height: 2.4rem;
   width: 2.4rem;
+}
+
+.icon-button:hover {
+  background: white;
+  border-color: #94a3b8;
+  transform: translateY(-1px);
 }
 
 .status-badge,
@@ -439,11 +547,11 @@ td {
 }
 
 .bar-fill-blue {
-  background: #2563eb;
+  background: linear-gradient(90deg, #2563eb, #38bdf8);
 }
 
 .bar-fill-green {
-  background: #16a34a;
+  background: linear-gradient(90deg, #059669, #34d399);
 }
 
 .chart-legend {
@@ -482,4 +590,39 @@ td {
   display: flex;
   gap: 0.7rem;
   padding: 0.85rem 0;
+}
+
+@media (max-width: 900px) {
+  .login-shell {
+    background:
+      linear-gradient(180deg, rgba(5, 46, 43, 0.62), rgba(244, 247, 246, 0.94) 42%),
+      url("/atomquest_bg_sideloaded.svg") center top / cover no-repeat;
+    grid-template-columns: 1fr;
+  }
+
+  .login-panel {
+    justify-self: stretch;
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    background:
+      linear-gradient(180deg, rgba(244, 247, 249, 0.94), rgba(235, 244, 240, 0.98)),
+      url("/bg2_warm_slate.svg") center / cover fixed,
+      #eef3f0;
+  }
+
+  .app-sidebar {
+    min-height: auto;
+  }
+
+  .chart-row {
+    grid-template-columns: 1fr;
+  }
+
+  .bar-track.wide {
+    grid-column: auto;
+  }
 }

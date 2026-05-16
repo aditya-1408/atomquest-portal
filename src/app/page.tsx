@@ -1160,7 +1160,7 @@ export default function Home() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f6f7f9] text-slate-950">
+    <main className={classNames("min-h-screen text-slate-950", activeUser ? "app-shell" : "auth-shell")}>
       {!activeUser && (
         <LoginScreen
           mode={authMode}
@@ -1185,7 +1185,7 @@ export default function Home() {
 
       {activeUser && (
         <>
-      <header className="border-b border-slate-200 bg-white">
+      <header className="app-header">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-5 py-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">AtomQuest 1.0</p>
@@ -1206,9 +1206,9 @@ export default function Home() {
         </div>
       </header>
 
-      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-5 px-5 py-5 lg:grid-cols-[240px_1fr]">
-        <aside className="h-fit border-r border-slate-200 bg-white p-3 lg:min-h-[calc(100vh-112px)]">
-          <div className="mb-4 rounded-md border border-slate-200 p-3">
+      <div className="app-layout mx-auto grid max-w-7xl grid-cols-1 gap-5 px-5 py-5 lg:grid-cols-[240px_1fr]">
+        <aside className="app-sidebar h-fit p-3 lg:min-h-[calc(100vh-112px)]">
+          <div className="user-card mb-4 rounded-md p-3">
             <p className="text-sm font-semibold">{activeUser.name}</p>
             <p className="text-xs text-slate-500">{activeUser.email}</p>
             <span className="mt-2 inline-flex rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
@@ -1229,7 +1229,7 @@ export default function Home() {
         </aside>
 
         <section className="space-y-5">
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
+          <div className="sync-banner flex flex-wrap items-center justify-between gap-2 rounded-md px-3 py-2 text-sm text-slate-600">
             <span>{loadError ? loadError : hasLoadedDatabase ? "Connected to Neon database" : "Loading database state..."}</span>
             <span className={classNames("status-badge", saveStatus === "error" ? "status-returned" : "status-approved")}>
               {saveStatus === "saving" ? "Saving" : saveStatus === "error" ? "Save issue" : "Synced"}
