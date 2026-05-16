@@ -1814,6 +1814,17 @@ function AdminUsers({
 function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => void }) {
   const activeQuarter = quarterForPhase(state.cycle.phase);
   const escalations = buildEscalations(state);
+  const employees = state.users.filter((user) => user.role === "Employee");
+  const managers = state.users.filter((user) => user.role === "Manager");
+  const averageForGoals = (goals: Goal[], quarter: Quarter) => {
+    const goalIds = new Set(goals.map((goal) => goal.id));
+    const matchingUpdates = state.updates.filter(
+      (update) => update.quarter === quarter && goalIds.has(update.goalId),
+    );
+    return matchingUpdates.length === 0
+      ? 0
+      : Math.round(matchingUpdates.reduce((sum, update) => sum + update.progressScore, 0) / matchingUpdates.length);
+  };
   const qoqRows = quarters.map((item) => {
     const quarterUpdates = state.updates.filter((update) => update.quarter === item);
     const averageScore =
@@ -1825,6 +1836,36 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
       averageScore,
       completed: quarterUpdates.filter((update) => update.status === "Completed").length,
       updatedGoals: new Set(quarterUpdates.map((update) => update.goalId)).size,
+    };
+  });
+  const individualTrendRows = employees.map((employee) => ({
+    name: employee.name,
+    values: quarters.map((item) => averageForGoals(state.goals.filter((goal) => goal.employeeId === employee.id), item)),
+  }));
+  const departmentTrendRows = Object.entries(
+    employees.reduce<Record<string, User[]>>((acc, employee) => {
+      acc[employee.department] = [...(acc[employee.department] ?? []), employee];
+      return acc;
+    }, {}),
+  ).map(([department, members]) => ({
+    name: department,
+    values: quarters.map((item) =>
+      averageForGoals(
+        state.goals.filter((goal) => members.some((member) => member.id === goal.employeeId)),
+        item,
+      ),
+    ),
+  }));
+  const teamTrendRows = managers.map((manager) => {
+    const team = employees.filter((employee) => employee.managerId === manager.id);
+    return {
+      name: `${manager.name} team`,
+      values: quarters.map((item) =>
+        averageForGoals(
+          state.goals.filter((goal) => team.some((member) => member.id === goal.employeeId)),
+          item,
+        ),
+      ),
     };
   });
   const byThrust = Object.values(
@@ -1841,12 +1882,49 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
       return acc;
     }, {}),
   );
-  const checkInRows = state.users.filter((user) => user.role === "Employee").map((employee) => ({
+  const byStatus = Object.values(
+    state.goals.reduce<Record<string, { name: string; value: number }>>((acc, goal) => {
+      acc[goal.status] = acc[goal.status] ?? { name: goal.status, value: 0 };
+      acc[goal.status].value += 1;
+      return acc;
+    }, {}),
+  );
+  const heatmapRows = employees.map((employee) => {
+    const goals = state.goals.filter((goal) => goal.employeeId === employee.id);
+    const approvedGoals = goals.filter((goal) => goal.status === "Approved");
+    const goalSheetStatus = goals.some((goal) => goal.status === "Approved")
+      ? "Approved"
+      : goals.some((goal) => goal.status === "Submitted")
+        ? "Submitted"
+        : goals.length > 0
+          ? "Draft"
+          : "Missing";
+    const quarterCells = quarters.map((item) => {
+      const updatesDone = approvedGoals.filter((goal) =>
+        state.updates.some((update) => update.goalId === goal.id && update.quarter === item),
+      ).length;
+      const updateRate = approvedGoals.length === 0 ? 0 : Math.round((updatesDone / approvedGoals.length) * 100);
+      const checkInDone = state.checkIns.some((checkIn) => checkIn.employeeId === employee.id && checkIn.quarter === item);
+      return {
+        quarter: item,
+        label: approvedGoals.length === 0 ? "N/A" : `${updateRate}%${checkInDone ? " + CI" : ""}`,
+        tone: (approvedGoals.length === 0
+          ? "neutral"
+          : updateRate === 100 && checkInDone
+            ? "good"
+            : updateRate > 0
+              ? "warn"
+              : "bad") as "good" | "warn" | "bad" | "neutral",
+      };
+    });
+    return { employee, goalSheetStatus, quarterCells };
+  });
+  const checkInRows = employees.map((employee) => ({
     name: employee.name,
     completed: state.checkIns.filter((checkIn) => checkIn.employeeId === employee.id).length,
   }));
-  const managerRows = state.users.filter((user) => user.role === "Manager").map((manager) => {
-    const team = state.users.filter((user) => user.managerId === manager.id);
+  const managerRows = managers.map((manager) => {
+    const team = employees.filter((user) => user.managerId === manager.id);
     const expected = Math.max(team.length * quarters.length, 1);
     const completed = state.checkIns.filter((checkIn) => checkIn.managerId === manager.id).length;
     return {
@@ -1895,8 +1973,15 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
           </div>
         </div>
       </Panel>
+      <Panel title="QoQ Drilldown">
+        <div className="grid gap-5 xl:grid-cols-3">
+          <TrendTable title="Individual" rows={individualTrendRows} />
+          <TrendTable title="Team" rows={teamTrendRows} />
+          <TrendTable title="Department" rows={departmentTrendRows} />
+        </div>
+      </Panel>
       <Panel title="Goal Distribution">
-        <div className="grid gap-5 md:grid-cols-2">
+        <div className="grid gap-5 md:grid-cols-3">
           <div>
             <p className="mb-2 text-sm font-semibold text-slate-700">By Thrust Area</p>
             <div className="space-y-3">
@@ -1921,6 +2006,36 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
               ))}
             </div>
           </div>
+          <div>
+            <p className="mb-2 text-sm font-semibold text-slate-700">By Status</p>
+            <div className="space-y-3">
+              {byStatus.map((item, index) => (
+                <div className="distribution-row" key={item.name}>
+                  <span className="distribution-dot" style={{ background: palette[(index + 3) % palette.length] }} />
+                  <span className="flex-1">{item.name}</span>
+                  <strong>{item.value}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Panel>
+      <Panel title="Completion Heatmap">
+        <div className="overflow-x-auto">
+          <table>
+            <thead><tr><th>Employee</th><th>Goal Sheet</th>{quarters.map((item) => <th key={item}>{item}</th>)}</tr></thead>
+            <tbody>
+              {heatmapRows.map((row) => (
+                <tr key={row.employee.id}>
+                  <td>{row.employee.name}</td>
+                  <td><HeatmapCell label={row.goalSheetStatus} tone={row.goalSheetStatus === "Approved" ? "good" : row.goalSheetStatus === "Submitted" ? "warn" : "bad"} /></td>
+                  {row.quarterCells.map((cell) => (
+                    <td key={cell.quarter}><HeatmapCell label={cell.label} tone={cell.tone} /></td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </Panel>
       <Panel title="Check-in Completion">
@@ -1976,6 +2091,36 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
       </Panel>
     </div>
   );
+}
+
+function TrendTable({ title, rows }: { title: string; rows: { name: string; values: number[] }[] }) {
+  return (
+    <div className="overflow-x-auto">
+      <p className="mb-2 text-sm font-semibold text-slate-700">{title}</p>
+      <table>
+        <thead><tr><th>Name</th>{quarters.map((item) => <th key={item}>{item}</th>)}</tr></thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.name}>
+              <td>{row.name}</td>
+              {row.values.map((value, index) => <td key={`${row.name}-${quarters[index]}`}>{value}%</td>)}
+            </tr>
+          ))}
+          {rows.length === 0 && <tr><td colSpan={5}>No data yet</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function HeatmapCell({ label, tone }: { label: string; tone: "good" | "warn" | "bad" | "neutral" }) {
+  const toneClass = {
+    good: "bg-emerald-100 text-emerald-800",
+    warn: "bg-amber-100 text-amber-800",
+    bad: "bg-rose-100 text-rose-800",
+    neutral: "bg-slate-100 text-slate-600",
+  }[tone];
+  return <span className={classNames("inline-flex rounded-md px-2 py-1 text-xs font-bold", toneClass)}>{label}</span>;
 }
 
 function AuditTrail({ logs }: { logs: AuditLog[] }) {
