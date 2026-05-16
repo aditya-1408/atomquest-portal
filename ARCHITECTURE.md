@@ -77,8 +77,19 @@ flowchart LR
 
 ## Cost Optimization
 
-- Vercel free tier or low-cost serverless hosting.
-- Supabase/Neon free tier PostgreSQL for hackathon scale.
-- Static-first UI and lightweight server actions.
-- CSV export generated on demand instead of scheduled heavy reporting.
-- Notification integrations can be event-driven and disabled for demo tenants.
+- Vercel free tier or low-cost serverless hosting for the Next.js app.
+- Neon free tier PostgreSQL for hackathon-scale relational persistence.
+- Single `/api/state` read endpoint loads the scoped user workspace in one request instead of many chatty calls.
+- API responses are role-scoped: employees receive only their records, managers receive only team data, and Admin/HR receives governance data.
+- Client saves are debounced to avoid writing to the database on every keystroke.
+- Reports and CSV exports are generated on demand in the browser, avoiding scheduled workers or paid reporting services.
+- Analytics and escalation modules are computed from existing goal/update/check-in records, so no extra infrastructure is required.
+- Real Microsoft Entra, email, and Teams integrations are documented as future enterprise add-ons, avoiding credential complexity and paid external dependencies during judging.
+
+## API Efficiency
+
+- Authentication uses signed HTTP-only cookies and one session lookup per protected API request.
+- Prisma queries in `GET /api/state` run in parallel for users, goals, updates, check-ins, shared goals, cycle, and audit logs.
+- `POST /api/state` batches persistence inside a Prisma transaction.
+- Role scoping reduces transferred data for employee and manager sessions.
+- UI-only analytics avoids server-side chart aggregation jobs for the demo scale.
