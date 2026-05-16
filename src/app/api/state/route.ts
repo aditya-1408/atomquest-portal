@@ -157,7 +157,7 @@ type DbCycle = {
 
 type TransactionClient = Pick<
   typeof prisma,
-  "cycle" | "sharedGoal" | "goal" | "quarterlyUpdate" | "checkIn" | "auditLog"
+  "user" | "cycle" | "sharedGoal" | "goal" | "quarterlyUpdate" | "checkIn" | "auditLog"
 >;
 
 const roleFromDb = {
@@ -419,6 +419,18 @@ export async function POST(request: Request) {
         where: { id: cycle.id },
         data: { phase: phaseToDb[state.cycle.phase as keyof typeof phaseToDb] },
       });
+
+      for (const user of state.users) {
+        if (user.role === "Employee") {
+          await tx.user.update({
+            where: { id: user.id },
+            data: {
+              department: user.department,
+              managerId: user.managerId ?? null,
+            },
+          });
+        }
+      }
     }
 
     for (const goal of state.sharedGoals) {

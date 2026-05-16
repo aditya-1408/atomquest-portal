@@ -132,6 +132,7 @@ type SharedGoalDraft = {
   targetValue: number;
   targetDate: string;
   weightage: number;
+  recipientIds: string[];
 };
 
 type AppState = {
@@ -815,6 +816,27 @@ export default function Home() {
     );
   };
 
+  const changeEmployeeManager = (employeeId: string, managerId: string) => {
+    if (!activeUser || activeUser.role !== "Admin") return;
+    const employee = state.users.find((user) => user.id === employeeId);
+    const previousManager = state.users.find((user) => user.id === employee?.managerId);
+    const nextManager = state.users.find((user) => user.id === managerId);
+    setAndAudit((current) =>
+      addAudit(
+        {
+          ...current,
+          users: current.users.map((user) =>
+            user.id === employeeId ? { ...user, managerId: managerId || undefined } : user,
+          ),
+        },
+        "Admin updated reporting manager",
+        employee?.name ?? employeeId,
+        previousManager?.name ?? "Unassigned",
+        nextManager?.name ?? "Unassigned",
+      ),
+    );
+  };
+
   const submitGoals = () => {
     if (!activeUser) return;
     if (!isGoalSettingOpen) return;
@@ -960,10 +982,11 @@ export default function Home() {
     });
   };
 
-  const pushSharedGoal = (draft: SharedGoalDraft) => {
+  const pushSharedGoal = (draft: SharedGoalDraft, recipientIds: string[]) => {
     if (!activeUser) return;
     const recipients = activeUser.role === "Manager" ? team : employees;
-    const teamIds = recipients.map((member) => member.id);
+    const teamIds = recipients.map((member) => member.id).filter((id) => recipientIds.includes(id));
+    if (teamIds.length === 0) return;
     const shared: SharedGoal = {
       id: crypto.randomUUID(),
       ownerId: teamIds[0] ?? "u-employee",
@@ -1242,10 +1265,10 @@ export default function Home() {
                   title: "Push Shared KPI",
                   message:
                     activeUser.role === "Manager"
-                      ? "Create linked shared KPI goals for every employee in this manager's team."
-                      : "Create linked shared KPI goals for all employees in the portal.",
+                      ? "Create linked shared KPI goals for the selected employees in this manager's team."
+                      : "Create linked shared KPI goals for the selected employees in the portal.",
                   confirmLabel: "Push KPI",
-                  onConfirm: () => pushSharedGoal(draft),
+                  onConfirm: () => pushSharedGoal(draft, draft.recipientIds),
                 })
               }
             />
@@ -1255,6 +1278,7 @@ export default function Home() {
             <AdminUsers
               state={state}
               changeCyclePhase={changeCyclePhase}
+              changeEmployeeManager={changeEmployeeManager}
               unlockEmployee={(employeeId) => {
                 const employee = state.users.find((user) => user.id === employeeId);
                 requestConfirmation({
@@ -1792,8 +1816,9 @@ function SharedGoals({
     targetValue: 95,
     targetDate: "2026-07-31",
     weightage: 10,
+    recipientIds: recipients.map((recipient) => recipient.id),
   });
-  const canPush = draft.title.trim().length > 0 && draft.weightage >= 10 && draft.weightage <= 100 && recipients.length > 0;
+  const canPush = draft.title.trim().length > 0 && draft.weightage >= 10 && draft.weightage <= 100 && draft.recipientIds.length > 0;
 
   return (
     <Panel
@@ -1839,6 +1864,29 @@ function SharedGoals({
           <input type="number" min={10} max={100} value={draft.weightage} onChange={(e) => setDraft({ ...draft, weightage: Number(e.target.value) })} />
         </Field>
       </div>
+      <div className="mb-5 rounded-md border border-slate-200 bg-slate-50 p-4">
+        <p className="mb-3 text-sm font-semibold text-slate-700">Select Recipients</p>
+        <div className="grid gap-2 md:grid-cols-2">
+          {recipients.map((recipient) => (
+            <label key={recipient.id} className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={draft.recipientIds.includes(recipient.id)}
+                onChange={(event) =>
+                  setDraft({
+                    ...draft,
+                    recipientIds: event.target.checked
+                      ? [...draft.recipientIds, recipient.id]
+                      : draft.recipientIds.filter((id) => id !== recipient.id),
+                  })
+                }
+              />
+              <span>{recipient.name} - {recipient.department}</span>
+            </label>
+          ))}
+        </div>
+        {recipients.length === 0 && <Empty text="No eligible recipients are available." />}
+      </div>
       <div className="grid gap-3 md:grid-cols-2">
         {state.sharedGoals.map((goal) => (
           <div className="text-card" key={goal.id}>
@@ -1856,13 +1904,16 @@ function SharedGoals({
 function AdminUsers({
   state,
   changeCyclePhase,
+  changeEmployeeManager,
   unlockEmployee,
 }: {
   state: AppState;
   changeCyclePhase: (phase: string) => void;
+  changeEmployeeManager: (employeeId: string, managerId: string) => void;
   unlockEmployee: (id: string) => void;
 }) {
   const employees = state.users.filter((user) => user.role === "Employee");
+  const managers = state.users.filter((user) => user.role === "Manager");
   return (
     <Panel title="Users, Hierarchy & Cycle">
       <div className="mb-5 rounded-md border border-slate-200 bg-slate-50 p-4">
@@ -1900,7 +1951,18 @@ function AdminUsers({
                 <td>{employee.name}</td>
                 <td>{employee.role}</td>
                 <td>{employee.department}</td>
-                <td>{manager?.name}</td>
+                <td>
+                  <select
+                    className="rounded-md border border-slate-300 px-2 py-1 text-sm"
+                    value={manager?.id ?? ""}
+                    onChange={(event) => changeEmployeeManager(employee.id, event.target.value)}
+                  >
+                    <option value="">Unassigned</option>
+                    {managers.map((item) => (
+                      <option key={item.id} value={item.id}>{item.name}</option>
+                    ))}
+                  </select>
+                </td>
                 <td><button className="secondary-button" onClick={() => unlockEmployee(employee.id)}><Unlock size={16} /> Unlock</button></td>
               </tr>
             );
