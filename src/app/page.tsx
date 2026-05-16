@@ -411,18 +411,53 @@ export default function Home() {
   const [activeEmployeeId, setActiveEmployeeId] = useState("u-employee");
   const [quarter, setQuarter] = useState<Quarter>("Q1");
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
+  const [hasLoadedDatabase, setHasLoadedDatabase] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
 
   useEffect(() => {
-    const timer = window.setTimeout(() => {
-      const stored = window.localStorage.getItem("atomquest-state");
-      if (stored) setState(JSON.parse(stored));
-    }, 0);
-    return () => window.clearTimeout(timer);
+    let cancelled = false;
+    async function loadState() {
+      try {
+        const response = await fetch("/api/state", { cache: "no-store" });
+        if (!response.ok) throw new Error("Could not load database state.");
+        const databaseState = (await response.json()) as AppState;
+        if (cancelled) return;
+        setState(databaseState);
+        setActiveUserId(databaseState.users.find((user) => user.role === "Employee")?.id ?? databaseState.users[0]?.id ?? "u-employee");
+        setActiveEmployeeId(databaseState.users.find((user) => user.role === "Employee")?.id ?? "u-employee");
+        setHasLoadedDatabase(true);
+        setLoadError("");
+      } catch (error) {
+        if (cancelled) return;
+        setLoadError(error instanceof Error ? error.message : "Could not load database state.");
+        setHasLoadedDatabase(true);
+      }
+    }
+    loadState();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem("atomquest-state", JSON.stringify(state));
-  }, [state]);
+    if (!hasLoadedDatabase) return;
+    const timer = window.setTimeout(async () => {
+      try {
+        setSaveStatus("saving");
+        const response = await fetch("/api/state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(state),
+        });
+        if (!response.ok) throw new Error("Could not save database state.");
+        setSaveStatus("saved");
+      } catch {
+        setSaveStatus("error");
+      }
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [hasLoadedDatabase, state]);
 
   const activeUser = state.users.find((user) => user.id === activeUserId)!;
   const employees = state.users.filter((user) => user.role === "Employee");
@@ -666,10 +701,14 @@ export default function Home() {
     );
   };
 
-  const resetDemo = () => {
-    const seeded = seedState();
-    setState(seeded);
-    localStorage.setItem("atomquest-state", JSON.stringify(seeded));
+  const resetDemo = async () => {
+    const response = await fetch("/api/state", { cache: "no-store" });
+    if (!response.ok) {
+      setLoadError("Could not reload database state.");
+      return;
+    }
+    setState((await response.json()) as AppState);
+    setSaveStatus("saved");
   };
 
   const exportCsv = () => {
@@ -799,6 +838,13 @@ export default function Home() {
         </aside>
 
         <section className="space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
+            <span>{loadError ? loadError : hasLoadedDatabase ? "Connected to Neon database" : "Loading database state..."}</span>
+            <span className={classNames("status-badge", saveStatus === "error" ? "status-returned" : "status-approved")}>
+              {saveStatus === "saving" ? "Saving" : saveStatus === "error" ? "Save issue" : "Synced"}
+            </span>
+          </div>
+
           {view === "Dashboard" && (
             <Dashboard
               state={state}
