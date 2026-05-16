@@ -236,6 +236,24 @@ function dateOnly(value: Date) {
   return value.toISOString().slice(0, 10);
 }
 
+function auditJsonToText(value: unknown): string | undefined {
+  if (!value) return undefined;
+  if (typeof value === "string") return value;
+  if (typeof value === "object" && "value" in value) {
+    return auditJsonToText((value as { value?: unknown }).value);
+  }
+  return JSON.stringify(value);
+}
+
+function textToAuditJson(value?: string) {
+  if (!value) return undefined;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return { value };
+  }
+}
+
 export async function GET() {
   const [users, cycle, goals, updates, checkIns, sharedGoals, auditLogs] = await Promise.all([
     prisma.user.findMany({ orderBy: { createdAt: "asc" } }),
@@ -315,8 +333,8 @@ export async function GET() {
       actor: log.actor.name,
       action: log.action,
       entity: log.entityId,
-      before: log.beforeJson ? JSON.stringify(log.beforeJson) : undefined,
-      after: log.afterJson ? JSON.stringify(log.afterJson) : undefined,
+      before: auditJsonToText(log.beforeJson),
+      after: auditJsonToText(log.afterJson),
       createdAt: log.createdAt.toISOString(),
     })),
     cycle: {
@@ -466,8 +484,8 @@ export async function POST(request: Request) {
           entityType: "DemoAction",
           entityId: log.entity,
           action: log.action,
-          beforeJson: log.before ? { value: log.before } : undefined,
-          afterJson: log.after ? { value: log.after } : undefined,
+          beforeJson: textToAuditJson(log.before),
+          afterJson: textToAuditJson(log.after),
           createdAt: new Date(log.createdAt),
         },
         create: {
@@ -476,8 +494,8 @@ export async function POST(request: Request) {
           entityType: "DemoAction",
           entityId: log.entity,
           action: log.action,
-          beforeJson: log.before ? { value: log.before } : undefined,
-          afterJson: log.after ? { value: log.after } : undefined,
+          beforeJson: textToAuditJson(log.before),
+          afterJson: textToAuditJson(log.after),
           createdAt: new Date(log.createdAt),
         },
       });
