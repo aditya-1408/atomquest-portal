@@ -490,8 +490,11 @@ export default function Home() {
   const employees = state.users.filter((user) => user.role === "Employee");
   const team = activeUser ? employees.filter((employee) => employee.managerId === activeUser.id) : [];
   const selectedEmployee =
-    state.users.find((user) => user.id === activeEmployeeId) ?? employees[0];
-  const employeeGoals = state.goals.filter((goal) => goal.employeeId === selectedEmployee.id);
+    state.users.find((user) => user.id === activeEmployeeId) ??
+    (activeUser?.role === "Manager" ? team[0] : employees[0]);
+  const employeeGoals = selectedEmployee
+    ? state.goals.filter((goal) => goal.employeeId === selectedEmployee.id)
+    : [];
   const ownGoals = activeUser ? state.goals.filter((goal) => goal.employeeId === activeUser.id) : [];
 
   const completeLogin = (userId: string) => {
@@ -616,7 +619,7 @@ export default function Home() {
   };
 
   const approveGoals = () => {
-    if (!activeUser) return;
+    if (!activeUser || !selectedEmployee) return;
     setAndAudit((current) =>
       addAudit(
         {
@@ -634,7 +637,7 @@ export default function Home() {
   };
 
   const returnGoals = (comment: string) => {
-    if (!activeUser) return;
+    if (!activeUser || !selectedEmployee) return;
     setAndAudit((current) =>
       addAudit(
         {
@@ -712,7 +715,7 @@ export default function Home() {
   };
 
   const completeCheckIn = (comment: string) => {
-    if (!activeUser) return;
+    if (!activeUser || !selectedEmployee) return;
     setAndAudit((current) => {
       const others = current.checkIns.filter(
         (checkIn) => !(checkIn.employeeId === selectedEmployee.id && checkIn.quarter === quarter),
@@ -1162,18 +1165,36 @@ function Dashboard({
       </div>
 
       <Panel title="Suggested Demo Path">
-        <div className="grid gap-3 md:grid-cols-3">
-          {[
-            ["Employee", "Create goals, show validations, submit.", "Goals"],
-            ["Manager", "Review, edit target/weightage, approve.", "Approvals"],
-            ["Admin", "Export report and inspect audit log.", "Reports"],
-          ].map(([role, text, target]) => (
-            <button key={role} className="text-card text-left" onClick={() => setView(target)}>
-              <p className="font-semibold">{role}</p>
-              <p className="text-sm text-slate-600">{text}</p>
+        {activeUser.role === "Employee" && (
+          <button className="text-card text-left" onClick={() => setView("Goals")}>
+            <p className="font-semibold">Employee workflow</p>
+            <p className="text-sm text-slate-600">Create goals, validate weightage, submit, and update quarterly achievement.</p>
+          </button>
+        )}
+        {activeUser.role === "Manager" && (
+          <div className="grid gap-3 md:grid-cols-2">
+            <button className="text-card text-left" onClick={() => setView("Approvals")}>
+              <p className="font-semibold">Approvals</p>
+              <p className="text-sm text-slate-600">Review submitted team sheets, edit targets, approve, or return for rework.</p>
             </button>
-          ))}
-        </div>
+            <button className="text-card text-left" onClick={() => setView("Check-ins")}>
+              <p className="font-semibold">Check-ins</p>
+              <p className="text-sm text-slate-600">Review planned vs actual progress and record structured discussion notes.</p>
+            </button>
+          </div>
+        )}
+        {activeUser.role === "Admin" && (
+          <div className="grid gap-3 md:grid-cols-2">
+            <button className="text-card text-left" onClick={() => setView("Reports")}>
+              <p className="font-semibold">Reports</p>
+              <p className="text-sm text-slate-600">Export achievement reports and inspect completion metrics.</p>
+            </button>
+            <button className="text-card text-left" onClick={() => setView("Audit Trail")}>
+              <p className="font-semibold">Audit Trail</p>
+              <p className="text-sm text-slate-600">Review who changed goal, approval, and check-in records.</p>
+            </button>
+          </div>
+        )}
       </Panel>
     </>
   );
@@ -1349,20 +1370,30 @@ function UpdateRow({
 
 function ManagerApprovals(props: {
   team: User[];
-  selectedEmployee: User;
+  selectedEmployee?: User;
   setActiveEmployeeId: (id: string) => void;
   goals: Goal[];
   updateGoal: (goalId: string, patch: Partial<Goal>) => void;
   approveGoals: () => void;
   returnGoals: (comment: string) => void;
 }) {
-  const validation = validateGoals(props.goals);
   const [returnComment, setReturnComment] = useState("");
+
+  if (!props.selectedEmployee) {
+    return (
+      <Panel title="L1 Goal Approval">
+        <Empty text="No employees report to this manager yet. Ask employees to sign up with this manager's email, or have Admin update the hierarchy." />
+      </Panel>
+    );
+  }
+
+  const selectedEmployee = props.selectedEmployee;
+  const validation = validateGoals(props.goals);
   const canReview = props.goals.some((goal) => goal.status === "Submitted" || goal.status === "Returned");
   return (
     <Panel
       title="L1 Goal Approval"
-      actions={<EmployeeSelect team={props.team} value={props.selectedEmployee.id} onChange={props.setActiveEmployeeId} />}
+      actions={<EmployeeSelect team={props.team} value={selectedEmployee.id} onChange={props.setActiveEmployeeId} />}
     >
       <ValidationBox validation={validation} />
       <div className="space-y-3">
@@ -1397,7 +1428,7 @@ function ManagerApprovals(props: {
 
 function ManagerCheckIns(props: {
   team: User[];
-  selectedEmployee: User;
+  selectedEmployee?: User;
   setActiveEmployeeId: (id: string) => void;
   goals: Goal[];
   updates: Update[];
@@ -1407,14 +1438,23 @@ function ManagerCheckIns(props: {
   completeCheckIn: (comment: string) => void;
 }) {
   const [comment, setComment] = useState("");
-  const existing = props.checkIns.find((checkIn) => checkIn.employeeId === props.selectedEmployee.id && checkIn.quarter === props.quarter);
+  if (!props.selectedEmployee) {
+    return (
+      <Panel title="Manager Check-in">
+        <Empty text="No employees report to this manager yet. Check-ins will appear once team members are assigned." />
+      </Panel>
+    );
+  }
+
+  const selectedEmployee = props.selectedEmployee;
+  const existing = props.checkIns.find((checkIn) => checkIn.employeeId === selectedEmployee.id && checkIn.quarter === props.quarter);
 
   return (
     <Panel
       title="Manager Check-in"
       actions={
         <div className="flex gap-2">
-          <EmployeeSelect team={props.team} value={props.selectedEmployee.id} onChange={props.setActiveEmployeeId} />
+          <EmployeeSelect team={props.team} value={selectedEmployee.id} onChange={props.setActiveEmployeeId} />
           <QuarterSelect quarter={props.quarter} setQuarter={props.setQuarter} />
         </div>
       }
