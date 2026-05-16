@@ -35,7 +35,16 @@ Create accounts from the Sign up tab. Managers and Admin/HR can sign up directly
 - Shared departmental KPI push to team.
 - Shared goal recipient restriction: title, target, UoM, and deadline are read-only; weightage remains editable.
 - Shared goal primary owner achievement sync.
-- Bonus-style analytics and escalation preview.
+- Analytics bonus module:
+  - QoQ achievement trend.
+  - Individual, team, and department drilldowns.
+  - Completion heatmap.
+  - Goal distribution by thrust area, UoM type, and status.
+  - Manager effectiveness dashboard.
+- Rule-based escalation bonus module:
+  - Configurable N-day rules for employee submission, manager approval, and quarterly check-ins.
+  - Auto-notification chain display from employee to manager to skip-level / HR.
+  - Admin-visible escalation log with owner, level, trigger age, and resolution action.
 
 ## Tech Stack
 
@@ -97,6 +106,16 @@ Both commands pass in the current workspace.
 9. Log in as Admin/HR.
    - Open Reports and export CSV.
    - Open Audit Trail.
+
+## Bonus Demo Path
+
+Open `Admin / HR -> Reports`.
+
+- Use `QoQ Achievement Trend` and `QoQ Drilldown` to show progress at organization, individual, team, and department levels.
+- Use `Completion Heatmap` to show goal-sheet and quarterly completion health.
+- Use `Goal Distribution` to show breakdowns by thrust area, UoM, and status.
+- Use `Manager Effectiveness` to compare check-in completion across L1 managers.
+- Use `Rule-Based Escalation Log` to configure N-day rules and show the escalation chain from employee to manager to skip-level / HR.
 
 ## Deployment: Vercel
 
