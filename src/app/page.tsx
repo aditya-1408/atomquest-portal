@@ -529,7 +529,10 @@ export default function Home() {
               },
         ),
       });
-      const result = (await response.json()) as { userId?: string; error?: string };
+      const rawResult = await response.text();
+      const result: { userId?: string; error?: string } = rawResult
+        ? (JSON.parse(rawResult) as { userId?: string; error?: string })
+        : { error: "The server returned an empty response." };
       if (!response.ok || !result.userId) throw new Error(result.error ?? "Authentication failed.");
       await loadDatabaseState(result.userId);
       completeLogin(result.userId);
