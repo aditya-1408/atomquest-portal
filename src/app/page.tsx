@@ -130,6 +130,7 @@ type AppState = {
 const quarters: Quarter[] = ["Q1", "Q2", "Q3", "Q4"];
 const statuses: ProgressStatus[] = ["Not Started", "On Track", "Completed"];
 const palette = ["#2563eb", "#16a34a", "#f59e0b", "#dc2626", "#7c3aed"];
+const cyclePhases = ["Goal Setting", "Q1 Check-in", "Q2 Check-in", "Q3 Check-in", "Q4 / Annual", "Closed"];
 
 const emptyGoal = (employeeId: string): Goal => ({
   id: crypto.randomUUID(),
@@ -404,6 +405,14 @@ function statusTone(status: GoalStatus) {
   }[status];
 }
 
+function quarterForPhase(phase: string): Quarter | null {
+  if (phase.startsWith("Q1")) return "Q1";
+  if (phase.startsWith("Q2")) return "Q2";
+  if (phase.startsWith("Q3")) return "Q3";
+  if (phase.startsWith("Q4")) return "Q4";
+  return null;
+}
+
 export default function Home() {
   const [state, setState] = useState<AppState>(seedState);
   const [activeUserId, setActiveUserId] = useState("");
@@ -584,10 +593,33 @@ export default function Home() {
   });
 
   const updateGoal = (goalId: string, patch: Partial<Goal>) => {
-    setAndAudit((current) => ({
-      ...current,
-      goals: current.goals.map((goal) => (goal.id === goalId ? { ...goal, ...patch } : goal)),
-    }));
+    setAndAudit((current) => {
+      const existing = current.goals.find((goal) => goal.id === goalId);
+      const nextState = {
+        ...current,
+        goals: current.goals.map((goal) => (goal.id === goalId ? { ...goal, ...patch } : goal)),
+      };
+
+      if (
+        existing &&
+        activeUser &&
+        (activeUser.role === "Manager" || activeUser.role === "Admin") &&
+        ("targetValue" in patch || "weightage" in patch)
+      ) {
+        return addAudit(
+          nextState,
+          activeUser.role === "Manager" ? "Manager edited target/weightage inline" : "Admin edited goal exception",
+          existing.title,
+          JSON.stringify({ targetValue: existing.targetValue, weightage: existing.weightage }),
+          JSON.stringify({
+            targetValue: patch.targetValue ?? existing.targetValue,
+            weightage: patch.weightage ?? existing.weightage,
+          }),
+        );
+      }
+
+      return nextState;
+    });
   };
 
   const requestConfirmation = (nextConfirmation: Confirmation) => {
@@ -600,9 +632,25 @@ export default function Home() {
   };
 
   const validation = validateGoals(ownGoals);
+  const isGoalSettingOpen = state.cycle.phase === "Goal Setting";
+  const activeQuarter = quarterForPhase(state.cycle.phase);
+
+  const changeCyclePhase = (phase: string) => {
+    if (!activeUser || activeUser.role !== "Admin" || !cyclePhases.includes(phase)) return;
+    setAndAudit((current) =>
+      addAudit(
+        { ...current, cycle: { ...current.cycle, phase } },
+        "Admin changed active cycle phase",
+        current.cycle.name,
+        current.cycle.phase,
+        phase,
+      ),
+    );
+  };
 
   const submitGoals = () => {
     if (!activeUser) return;
+    if (!isGoalSettingOpen) return;
     if (!validation.ok) return;
     setAndAudit((current) =>
       addAudit(
@@ -620,6 +668,7 @@ export default function Home() {
 
   const approveGoals = () => {
     if (!activeUser || !selectedEmployee) return;
+    if (!isGoalSettingOpen) return;
     setAndAudit((current) =>
       addAudit(
         {
@@ -638,6 +687,7 @@ export default function Home() {
 
   const returnGoals = (comment: string) => {
     if (!activeUser || !selectedEmployee) return;
+    if (!isGoalSettingOpen) return;
     setAndAudit((current) =>
       addAudit(
         {
@@ -675,6 +725,7 @@ export default function Home() {
 
   const saveUpdate = (goal: Goal, actualValue: number, actualDate: string, status: ProgressStatus, comment: string) => {
     if (!activeUser) return;
+    if (!activeQuarter || activeQuarter !== quarter) return;
     const progressScore = scoreGoal(goal, actualValue, actualDate);
     setAndAudit((current) => {
       const existing = current.updates.find(
@@ -716,6 +767,7 @@ export default function Home() {
 
   const completeCheckIn = (comment: string) => {
     if (!activeUser || !selectedEmployee) return;
+    if (!activeQuarter || activeQuarter !== quarter) return;
     setAndAudit((current) => {
       const others = current.checkIns.filter(
         (checkIn) => !(checkIn.employeeId === selectedEmployee.id && checkIn.quarter === quarter),
@@ -943,6 +995,7 @@ export default function Home() {
             <EmployeeGoals
               goals={ownGoals}
               validation={validation}
+              isGoalSettingOpen={isGoalSettingOpen}
               updateGoal={updateGoal}
               addGoal={() =>
                 setState((current) => ({
@@ -966,6 +1019,7 @@ export default function Home() {
               updates={state.updates}
               quarter={quarter}
               setQuarter={setQuarter}
+              activeQuarter={activeQuarter}
               saveUpdate={saveUpdate}
             />
           )}
@@ -977,6 +1031,7 @@ export default function Home() {
               setActiveEmployeeId={setActiveEmployeeId}
               goals={employeeGoals}
               updateGoal={updateGoal}
+              isGoalSettingOpen={isGoalSettingOpen}
               approveGoals={() =>
                 requestConfirmation({
                   title: "Approve Goal Sheet",
@@ -1006,6 +1061,7 @@ export default function Home() {
               checkIns={state.checkIns}
               quarter={quarter}
               setQuarter={setQuarter}
+              activeQuarter={activeQuarter}
               completeCheckIn={completeCheckIn}
             />
           )}
@@ -1031,6 +1087,7 @@ export default function Home() {
           {activeUser.role === "Admin" && view === "Users & Cycles" && (
             <AdminUsers
               state={state}
+              changeCyclePhase={changeCyclePhase}
               unlockEmployee={(employeeId) => {
                 const employee = state.users.find((user) => user.id === employeeId);
                 requestConfirmation({
@@ -1203,6 +1260,7 @@ function Dashboard({
 function EmployeeGoals({
   goals,
   validation,
+  isGoalSettingOpen,
   updateGoal,
   addGoal,
   removeGoal,
@@ -1210,12 +1268,13 @@ function EmployeeGoals({
 }: {
   goals: Goal[];
   validation: ReturnType<typeof validateGoals>;
+  isGoalSettingOpen: boolean;
   updateGoal: (goalId: string, patch: Partial<Goal>) => void;
   addGoal: () => void;
   removeGoal: (goalId: string) => void;
   submitGoals: () => void;
 }) {
-  const sheetEditable = goals.every((goal) => goal.status === "Draft" || goal.status === "Returned");
+  const sheetEditable = isGoalSettingOpen && goals.every((goal) => goal.status === "Draft" || goal.status === "Returned");
   const canSubmit = validation.ok && goals.length > 0 && sheetEditable;
 
   return (
@@ -1233,6 +1292,11 @@ function EmployeeGoals({
       }
     >
       <ValidationBox validation={validation} />
+      {!isGoalSettingOpen && (
+        <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          Goal creation, edits, and submission are available only during the Goal Setting phase.
+        </div>
+      )}
       {!sheetEditable && (
         <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
           This sheet is waiting for manager action or already locked, so employee edits are paused.
@@ -1240,7 +1304,7 @@ function EmployeeGoals({
       )}
       <div className="space-y-4">
         {goals.map((goal) => {
-          const canEditGoal = !goal.locked && (goal.status === "Draft" || goal.status === "Returned");
+          const canEditGoal = isGoalSettingOpen && !goal.locked && (goal.status === "Draft" || goal.status === "Returned");
           const readOnly = !canEditGoal || Boolean(goal.sharedGoalId);
           return (
             <div key={goal.id} className="goal-card">
@@ -1301,19 +1365,38 @@ function QuarterlyUpdate({
   updates,
   quarter,
   setQuarter,
+  activeQuarter,
   saveUpdate,
 }: {
   goals: Goal[];
   updates: Update[];
   quarter: Quarter;
   setQuarter: (quarter: Quarter) => void;
+  activeQuarter: Quarter | null;
   saveUpdate: (goal: Goal, actualValue: number, actualDate: string, status: ProgressStatus, comment: string) => void;
 }) {
+  const canUpdate = activeQuarter === quarter;
   return (
     <Panel title="Quarterly Achievement Update" actions={<QuarterSelect quarter={quarter} setQuarter={setQuarter} />}>
+      {!activeQuarter && (
+        <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          Achievement capture is closed until a quarterly check-in phase is active.
+        </div>
+      )}
+      {activeQuarter && !canUpdate && (
+        <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          {activeQuarter} is the active check-in window. You can view {quarter}, but updates are locked.
+        </div>
+      )}
       <div className="space-y-4">
         {goals.map((goal) => (
-          <UpdateRow key={goal.id} goal={goal} existing={updates.find((update) => update.goalId === goal.id && update.quarter === quarter)} saveUpdate={saveUpdate} />
+          <UpdateRow
+            key={goal.id}
+            goal={goal}
+            existing={updates.find((update) => update.goalId === goal.id && update.quarter === quarter)}
+            canUpdate={canUpdate}
+            saveUpdate={saveUpdate}
+          />
         ))}
         {goals.length === 0 && <Empty text="No approved goals yet. Ask the manager to approve the sheet first." />}
       </div>
@@ -1324,10 +1407,12 @@ function QuarterlyUpdate({
 function UpdateRow({
   goal,
   existing,
+  canUpdate,
   saveUpdate,
 }: {
   goal: Goal;
   existing?: Update;
+  canUpdate: boolean;
   saveUpdate: (goal: Goal, actualValue: number, actualDate: string, status: ProgressStatus, comment: string) => void;
 }) {
   const [actualValue, setActualValue] = useState(existing?.actualValue ?? 0);
@@ -1347,21 +1432,21 @@ function UpdateRow({
       </div>
       <div className="form-grid mt-4">
         <Field label="Actual Achievement">
-          <input type="number" value={actualValue} onChange={(e) => setActualValue(Number(e.target.value))} />
+          <input type="number" value={actualValue} disabled={!canUpdate} onChange={(e) => setActualValue(Number(e.target.value))} />
         </Field>
         <Field label="Actual Date">
-          <input type="date" value={actualDate} onChange={(e) => setActualDate(e.target.value)} />
+          <input type="date" value={actualDate} disabled={!canUpdate} onChange={(e) => setActualDate(e.target.value)} />
         </Field>
         <Field label="Status">
-          <select value={status} onChange={(e) => setStatus(e.target.value as ProgressStatus)}>
+          <select value={status} disabled={!canUpdate} onChange={(e) => setStatus(e.target.value as ProgressStatus)}>
             {statuses.map((item) => <option key={item}>{item}</option>)}
           </select>
         </Field>
         <Field label="Comment">
-          <textarea value={comment} onChange={(e) => setComment(e.target.value)} />
+          <textarea value={comment} disabled={!canUpdate} onChange={(e) => setComment(e.target.value)} />
         </Field>
       </div>
-      <button className="primary-button mt-4" onClick={() => saveUpdate(goal, Number(actualValue), actualDate, status, comment)}>
+      <button className="primary-button mt-4" disabled={!canUpdate} onClick={() => saveUpdate(goal, Number(actualValue), actualDate, status, comment)}>
         <CheckCircle2 size={17} /> Save update
       </button>
     </div>
@@ -1374,6 +1459,7 @@ function ManagerApprovals(props: {
   setActiveEmployeeId: (id: string) => void;
   goals: Goal[];
   updateGoal: (goalId: string, patch: Partial<Goal>) => void;
+  isGoalSettingOpen: boolean;
   approveGoals: () => void;
   returnGoals: (comment: string) => void;
 }) {
@@ -1389,13 +1475,19 @@ function ManagerApprovals(props: {
 
   const selectedEmployee = props.selectedEmployee;
   const validation = validateGoals(props.goals);
-  const canReview = props.goals.some((goal) => goal.status === "Submitted" || goal.status === "Returned");
+  const canReview =
+    props.isGoalSettingOpen && props.goals.some((goal) => goal.status === "Submitted");
   return (
     <Panel
       title="L1 Goal Approval"
       actions={<EmployeeSelect team={props.team} value={selectedEmployee.id} onChange={props.setActiveEmployeeId} />}
     >
       <ValidationBox validation={validation} />
+      {!props.isGoalSettingOpen && (
+        <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          L1 review, inline edits, approval, and return-for-rework are available only during the Goal Setting phase.
+        </div>
+      )}
       <div className="space-y-3">
         {props.goals.map((goal) => (
           <div key={goal.id} className="goal-card">
@@ -1435,6 +1527,7 @@ function ManagerCheckIns(props: {
   checkIns: CheckIn[];
   quarter: Quarter;
   setQuarter: (quarter: Quarter) => void;
+  activeQuarter: Quarter | null;
   completeCheckIn: (comment: string) => void;
 }) {
   const [comment, setComment] = useState("");
@@ -1448,6 +1541,7 @@ function ManagerCheckIns(props: {
 
   const selectedEmployee = props.selectedEmployee;
   const existing = props.checkIns.find((checkIn) => checkIn.employeeId === selectedEmployee.id && checkIn.quarter === props.quarter);
+  const canComplete = props.activeQuarter === props.quarter;
 
   return (
     <Panel
@@ -1459,6 +1553,16 @@ function ManagerCheckIns(props: {
         </div>
       }
     >
+      {!props.activeQuarter && (
+        <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          Manager check-ins are closed until a quarterly check-in phase is active.
+        </div>
+      )}
+      {props.activeQuarter && !canComplete && (
+        <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          {props.activeQuarter} is the active check-in window. You can review {props.quarter}, but completion is locked.
+        </div>
+      )}
       <div className="overflow-x-auto">
         <table>
           <thead><tr><th>Goal</th><th>Planned</th><th>Actual</th><th>Status</th><th>Progress</th></tr></thead>
@@ -1479,9 +1583,14 @@ function ManagerCheckIns(props: {
         </table>
       </div>
       <Field label="Structured Check-in Comment">
-        <textarea value={comment || existing?.comment || ""} onChange={(e) => setComment(e.target.value)} placeholder="Discussion summary, blockers, next actions..." />
+        <textarea
+          value={comment || existing?.comment || ""}
+          disabled={!canComplete}
+          onChange={(e) => setComment(e.target.value)}
+          placeholder="Discussion summary, blockers, next actions..."
+        />
       </Field>
-      <button className="primary-button mt-4" onClick={() => props.completeCheckIn(comment || existing?.comment || "")}>
+      <button className="primary-button mt-4" disabled={!canComplete} onClick={() => props.completeCheckIn(comment || existing?.comment || "")}>
         <MessageSquare size={17} /> Complete check-in
       </button>
     </Panel>
@@ -1567,10 +1676,35 @@ function SharedGoals({
   );
 }
 
-function AdminUsers({ state, unlockEmployee }: { state: AppState; unlockEmployee: (id: string) => void }) {
+function AdminUsers({
+  state,
+  changeCyclePhase,
+  unlockEmployee,
+}: {
+  state: AppState;
+  changeCyclePhase: (phase: string) => void;
+  unlockEmployee: (id: string) => void;
+}) {
   const employees = state.users.filter((user) => user.role === "Employee");
   return (
     <Panel title="Users, Hierarchy & Cycle">
+      <div className="mb-5 rounded-md border border-slate-200 bg-slate-50 p-4">
+        <div className="form-grid">
+          <Field label="Active Cycle">
+            <input value={state.cycle.name} disabled />
+          </Field>
+          <Field label="Active Phase">
+            <select value={state.cycle.phase} onChange={(event) => changeCyclePhase(event.target.value)}>
+              {cyclePhases.map((phase) => (
+                <option key={phase}>{phase}</option>
+              ))}
+            </select>
+          </Field>
+        </div>
+        <p className="mt-3 text-sm text-slate-600">
+          Admin controls the active window: Goal Setting enables creation and approval, quarterly phases enable only that quarter&apos;s achievement capture and check-ins.
+        </p>
+      </div>
       <div className="mb-5 grid gap-3 md:grid-cols-5">
         {Object.entries(state.cycle.windows).map(([name, value]) => (
           <div key={name} className="text-card">

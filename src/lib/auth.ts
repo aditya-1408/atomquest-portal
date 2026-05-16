@@ -5,8 +5,8 @@ import { prisma } from "@/lib/prisma";
 export const sessionCookieName = "atomquest_session";
 
 function sessionSecret() {
-  const secret = process.env.SESSION_SECRET ?? process.env.NEXTAUTH_SECRET ?? process.env.DEMO_LOGIN_PASSWORD;
-  if (!secret) throw new Error("SESSION_SECRET, NEXTAUTH_SECRET, or DEMO_LOGIN_PASSWORD is required.");
+  const secret = process.env.SESSION_SECRET ?? process.env.NEXTAUTH_SECRET;
+  if (!secret) throw new Error("SESSION_SECRET or NEXTAUTH_SECRET is required.");
   return secret;
 }
 

@@ -1,25 +1,34 @@
 # Architecture
 
-## Current Hackathon Demo Architecture
+## Current Architecture
 
 ```mermaid
 flowchart LR
     E["Employee Browser"] --> UI["Next.js App on Vercel"]
     M["Manager Browser"] --> UI
     A["Admin / HR Browser"] --> UI
-    UI --> LS["Browser localStorage demo persistence"]
+    UI --> API["Next.js API Routes"]
+    API --> Auth["Signed HTTP-only Session Auth"]
+    API --> DB["Neon PostgreSQL via Prisma"]
     UI --> CSV["CSV Achievement Export"]
-    UI --> Audit["In-app Audit Trail"]
+    API --> Audit["Audit Log Table"]
     UI --> Dash["Completion and Analytics Dashboards"]
 ```
 
 ## Why This Architecture
 
-- Fastest path to a stable hosted demo.
-- No paid services required.
-- No dependency on external credentials during the hackathon.
-- Works as a browser-accessible portal, satisfying the primary submission constraint.
-- Keeps the UI, validation rules, role flows, and governance logic visible to judges.
+- Hosted, browser-accessible, and cost-aware for hackathon judging.
+- Uses Neon PostgreSQL so auth, goals, approvals, updates, check-ins, audit logs, and reports persist across sessions.
+- Keeps role access scoped in the API: employees see their own data, managers see their team, and Admin/HR sees governance-wide data.
+- Uses standard Vercel deployment with Prisma generation during install/build.
+- Leaves Microsoft Entra and Teams integration as future enterprise modules unless tenant credentials are available.
+
+## Environment
+
+- `DATABASE_URL`: Neon PostgreSQL connection string.
+- `SESSION_SECRET`: long random session-signing secret.
+- `NEXTAUTH_SECRET`: optional compatible secret name.
+- `NEXTAUTH_URL`: deployed Vercel URL.
 
 ## Production Architecture Upgrade
 
@@ -29,8 +38,8 @@ flowchart LR
     M["Manager L1"] --> Entra
     A["Admin / HR"] --> Entra
     Entra --> App["Next.js Web App on Vercel / Azure App Service"]
-    App --> API["Server Actions / API Layer"]
-    API --> DB["PostgreSQL: Supabase, Neon, or Azure DB"]
+    App --> API["Server Actions / API Routes"]
+    API --> DB["PostgreSQL: Neon / Azure DB"]
     API --> Audit["Audit Log Table"]
     API --> Reports["CSV / Excel Export Service"]
     API --> Rules["Escalation Rules Engine"]
@@ -73,4 +82,3 @@ flowchart LR
 - Static-first UI and lightweight server actions.
 - CSV export generated on demand instead of scheduled heavy reporting.
 - Notification integrations can be event-driven and disabled for demo tenants.
-

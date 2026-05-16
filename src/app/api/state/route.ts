@@ -157,7 +157,7 @@ type DbCycle = {
 
 type TransactionClient = Pick<
   typeof prisma,
-  "sharedGoal" | "goal" | "quarterlyUpdate" | "checkIn" | "auditLog"
+  "cycle" | "sharedGoal" | "goal" | "quarterlyUpdate" | "checkIn" | "auditLog"
 >;
 
 const roleFromDb = {
@@ -223,6 +223,15 @@ const phaseFromDb = {
   Q3_CHECK_IN: "Q3 Check-in",
   Q4_ANNUAL: "Q4 / Annual",
   CLOSED: "Closed",
+} as const;
+
+const phaseToDb = {
+  "Goal Setting": "GOAL_SETTING",
+  "Q1 Check-in": "Q1_CHECK_IN",
+  "Q2 Check-in": "Q2_CHECK_IN",
+  "Q3 Check-in": "Q3_CHECK_IN",
+  "Q4 / Annual": "Q4_ANNUAL",
+  Closed: "CLOSED",
 } as const;
 
 const defaultWindows = {
@@ -405,6 +414,13 @@ export async function POST(request: Request) {
   }
 
   await prisma.$transaction(async (tx: TransactionClient) => {
+    if (sessionUser.role === "ADMIN" && state.cycle.phase in phaseToDb) {
+      await tx.cycle.update({
+        where: { id: cycle.id },
+        data: { phase: phaseToDb[state.cycle.phase as keyof typeof phaseToDb] },
+      });
+    }
+
     for (const goal of state.sharedGoals) {
       await tx.sharedGoal.upsert({
         where: { id: goal.id },

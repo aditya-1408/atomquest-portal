@@ -4,20 +4,11 @@ Hackathon submission for AtomQuest Hackathon 1.0: an in-house web portal for emp
 
 ## Live Demo Readiness
 
-The app is built as a low-cost browser-first demo using Next.js and local browser persistence. It requires no paid infrastructure for the first hosted demo and can be deployed directly to Vercel.
+The app runs as a real database-backed Next.js portal on Vercel with Neon PostgreSQL, Prisma, password-based signup/login, signed HTTP-only sessions, role-scoped dashboards, and server-side API protection.
 
-For a production rollout, replace the local persistence layer with the database schema described in `ARCHITECTURE.md`.
+## Accounts
 
-## Demo Credentials
-
-Use the persona buttons in the header or the role selector:
-
-| Role | User | Email |
-| --- | --- | --- |
-| Admin / HR | Ananya HR | `admin@atomquest.demo` |
-| Manager L1 | Rohan Mehta | `manager@atomquest.demo` |
-| Employee | Priya Shah | `employee@atomquest.demo` |
-| Employee | Karan Iyer | `employee2@atomquest.demo` |
+Create accounts from the Sign up tab. Managers and Admin/HR can sign up directly. Employees can sign up with an existing manager email to attach themselves to that L1 manager's team.
 
 ## Implemented Features
 
@@ -28,6 +19,7 @@ Use the persona buttons in the header or the role selector:
   - Minimum individual goal weightage is 10%.
   - Maximum 8 goals per employee.
 - Goal submission workflow.
+- Admin-controlled cycle phase enforcement for Goal Setting and quarterly check-in windows.
 - Manager L1 dashboard.
 - Manager inline edit of target and weightage.
 - Manager approve and lock flow.
@@ -52,7 +44,9 @@ Use the persona buttons in the header or the role selector:
 - React
 - Tailwind CSS
 - lucide-react icons
-- Browser localStorage demo persistence
+- PostgreSQL via Neon
+- Prisma ORM
+- Signed HTTP-only session cookie auth
 
 ## Local Setup
 
@@ -78,30 +72,29 @@ Both commands pass in the current workspace.
 
 ## Demo Script
 
-1. Start as Employee Priya.
-   - Open Goals.
-   - Show locked approved goals.
-   - Open Quarterly Update.
-   - Enter Q1 actuals and save.
-2. Switch to Employee Karan.
-   - Open Goals.
-   - Show submitted editable sheet.
-   - Demonstrate validation by changing weightage away from 100%.
-3. Switch to Manager.
-   - Open Approvals.
-   - Select Karan.
-   - Edit target or weightage inline.
-   - Approve and lock.
-4. Open Check-ins as Manager.
-   - Select employee and quarter.
-   - Review planned vs actual.
-   - Add structured check-in comment.
-5. Open Shared Goals as Manager.
-   - Push departmental KPI.
-   - Switch to an employee and show title/target read-only, weightage editable.
-6. Switch to Admin.
+1. Sign up as Admin/HR.
    - Open Users & Cycles.
-   - Show cycle windows and unlock exception.
+   - Set active phase to Goal Setting.
+2. Sign up as Manager.
+   - Use the same department you want employees to join.
+3. Sign up as Employee.
+   - Enter the manager email during signup.
+   - Open Goals, create goals, verify validation, and submit.
+4. Log in as Manager.
+   - Open Approvals.
+   - Review the employee sheet, edit target or weightage inline, return for rework or approve and lock.
+5. Log in as Admin/HR.
+   - Move the active phase to Q1 Check-in.
+6. Log in as Employee.
+   - Open Quarterly Update.
+   - Enter Q1 actual achievement and status.
+7. Log in as Manager.
+   - Open Check-ins.
+   - Review planned vs actual and add a structured check-in comment.
+8. Open Shared Goals as Manager or Admin/HR.
+   - Push departmental KPI.
+   - Confirm recipients can edit only weightage.
+9. Log in as Admin/HR.
    - Open Reports and export CSV.
    - Open Audit Trail.
 
@@ -112,17 +105,15 @@ Both commands pass in the current workspace.
 3. Framework preset: Next.js.
 4. Build command: `npm run build`.
 5. Output directory: leave default.
-6. Environment variables: none required for the demo version.
+6. Environment variables:
+   - `DATABASE_URL`
+   - `SESSION_SECRET`
+   - `NEXTAUTH_SECRET` if you also want a NextAuth-compatible secret name
+   - `NEXTAUTH_URL`
 7. Deploy.
 
-## Production Upgrade Path
+## Future Enterprise Upgrade Path
 
-The demo uses local browser persistence for speed and cost optimization. For a production-grade version:
-
-- Add PostgreSQL using Supabase, Neon, or Azure Database for PostgreSQL.
-- Add Prisma models for users, cycles, goals, shared goals, updates, check-ins, audit logs, and escalation logs.
-- Replace demo role switching with Microsoft Entra ID.
+- Replace open signup with HR/admin-provisioned invitations or Microsoft Entra ID SSO.
 - Map manager hierarchy from Entra profile attributes or HRMS data.
-- Add server-side authorization checks.
 - Add real email or Microsoft Teams notifications using Microsoft Graph.
-
