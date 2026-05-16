@@ -420,7 +420,7 @@ export default function Home() {
     );
   };
 
-  const returnGoals = () => {
+  const returnGoals = (comment: string) => {
     setAndAudit((current) =>
       addAudit(
         {
@@ -433,6 +433,8 @@ export default function Home() {
         },
         "Returned goal sheet for rework",
         selectedEmployee.name,
+        undefined,
+        comment.trim() || "No manager comment provided",
       ),
     );
   };
@@ -776,6 +778,8 @@ function validateGoals(goals: Goal[]) {
   if (goals.length === 0) messages.push("Add at least one goal.");
   if (goals.length > 8) messages.push("Maximum 8 goals allowed.");
   if (goals.some((goal) => Number(goal.weightage) < 10)) messages.push("Each goal must have at least 10% weightage.");
+  if (goals.some((goal) => Number(goal.weightage) > 100)) messages.push("Individual goal weightage cannot exceed 100%.");
+  if (goals.some((goal) => Number(goal.weightage) <= 0)) messages.push("Goal weightage must be a positive number.");
   if (total !== 100) messages.push(`Total weightage must equal 100%. Current total: ${total}%.`);
   if (goals.some((goal) => !goal.title.trim())) messages.push("Every goal needs a title.");
   return { ok: messages.length === 0, messages, total };
@@ -898,24 +902,33 @@ function EmployeeGoals({
   removeGoal: (goalId: string) => void;
   submitGoals: () => void;
 }) {
+  const sheetEditable = goals.every((goal) => goal.status === "Draft" || goal.status === "Returned");
+  const canSubmit = validation.ok && goals.length > 0 && sheetEditable;
+
   return (
     <Panel
       title="Goal Sheet"
       actions={
         <>
-          <button className="secondary-button" onClick={addGoal} disabled={goals.length >= 8}>
+          <button className="secondary-button" onClick={addGoal} disabled={!sheetEditable || goals.length >= 8}>
             <Plus size={17} /> Add goal
           </button>
-          <button className="primary-button" onClick={submitGoals} disabled={!validation.ok}>
+          <button className="primary-button" onClick={submitGoals} disabled={!canSubmit}>
             <Send size={17} /> Submit
           </button>
         </>
       }
     >
       <ValidationBox validation={validation} />
+      {!sheetEditable && (
+        <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+          This sheet is waiting for manager action or already locked, so employee edits are paused.
+        </div>
+      )}
       <div className="space-y-4">
         {goals.map((goal) => {
-          const readOnly = goal.locked || Boolean(goal.sharedGoalId);
+          const canEditGoal = !goal.locked && (goal.status === "Draft" || goal.status === "Returned");
+          const readOnly = !canEditGoal || Boolean(goal.sharedGoalId);
           return (
             <div key={goal.id} className="goal-card">
               <div className="flex items-start justify-between gap-3">
@@ -924,7 +937,7 @@ function EmployeeGoals({
                   {goal.locked && <span className="ml-2 status-badge"><Lock size={12} /> Locked</span>}
                   {goal.sharedGoalId && <span className="ml-2 status-badge"><Share2 size={12} /> Shared KPI</span>}
                 </div>
-                <button className="icon-button" disabled={goal.locked} onClick={() => removeGoal(goal.id)}>
+                <button className="icon-button" disabled={!canEditGoal || Boolean(goal.sharedGoalId)} onClick={() => removeGoal(goal.id)}>
                   <Trash2 size={16} />
                 </button>
               </div>
@@ -959,7 +972,7 @@ function EmployeeGoals({
                   <input type="date" value={goal.targetDate} disabled={readOnly} onChange={(e) => updateGoal(goal.id, { targetDate: e.target.value })} />
                 </Field>
                 <Field label="Weightage">
-                  <input type="number" min={10} value={goal.weightage} disabled={goal.locked} onChange={(e) => updateGoal(goal.id, { weightage: Number(e.target.value) })} />
+                  <input type="number" min={10} max={100} value={goal.weightage} disabled={!canEditGoal} onChange={(e) => updateGoal(goal.id, { weightage: Number(e.target.value) })} />
                 </Field>
               </div>
             </div>
@@ -1049,9 +1062,11 @@ function ManagerApprovals(props: {
   goals: Goal[];
   updateGoal: (goalId: string, patch: Partial<Goal>) => void;
   approveGoals: () => void;
-  returnGoals: () => void;
+  returnGoals: (comment: string) => void;
 }) {
   const validation = validateGoals(props.goals);
+  const [returnComment, setReturnComment] = useState("");
+  const canReview = props.goals.some((goal) => goal.status === "Submitted" || goal.status === "Returned");
   return (
     <Panel
       title="L1 Goal Approval"
@@ -1068,18 +1083,21 @@ function ManagerApprovals(props: {
                 <span className="status-badge mt-2">{goal.status}</span>
               </div>
               <Field label="Target">
-                <input type="number" value={goal.targetValue} disabled={goal.locked || goal.uomType === "Timeline"} onChange={(e) => props.updateGoal(goal.id, { targetValue: Number(e.target.value) })} />
+                <input type="number" value={goal.targetValue} disabled={!canReview || goal.locked || goal.uomType === "Timeline"} onChange={(e) => props.updateGoal(goal.id, { targetValue: Number(e.target.value) })} />
               </Field>
               <Field label="Weightage">
-                <input type="number" value={goal.weightage} disabled={goal.locked} onChange={(e) => props.updateGoal(goal.id, { weightage: Number(e.target.value) })} />
+                <input type="number" min={10} max={100} value={goal.weightage} disabled={!canReview || goal.locked} onChange={(e) => props.updateGoal(goal.id, { weightage: Number(e.target.value) })} />
               </Field>
             </div>
           </div>
         ))}
       </div>
+      <Field label="Return Comment">
+        <textarea value={returnComment} onChange={(e) => setReturnComment(e.target.value)} placeholder="Reason for rework, expected changes, and next action..." />
+      </Field>
       <div className="mt-5 flex flex-wrap gap-3">
-        <button className="primary-button" disabled={!validation.ok} onClick={props.approveGoals}><ShieldCheck size={17} /> Approve & lock</button>
-        <button className="secondary-button" onClick={props.returnGoals}><RotateCcw size={17} /> Return for rework</button>
+        <button className="primary-button" disabled={!validation.ok || !canReview} onClick={props.approveGoals}><ShieldCheck size={17} /> Approve & lock</button>
+        <button className="secondary-button" disabled={!canReview || returnComment.trim().length === 0} onClick={() => props.returnGoals(returnComment)}><RotateCcw size={17} /> Return for rework</button>
       </div>
     </Panel>
   );
