@@ -1775,7 +1775,14 @@ function LoginScreen({
               </Field>
               <div className="form-grid">
                 <Field label="Role">
-                  <select value={role} onChange={(event) => setRole(event.target.value as Role)}>
+                  <select
+                    value={role}
+                    onChange={(event) => {
+                      const nextRole = event.target.value as Role;
+                      setRole(nextRole);
+                      if (nextRole !== "Employee") setManagerEmail("");
+                    }}
+                  >
                     <option>Employee</option>
                     <option>Manager</option>
                     <option>Admin</option>

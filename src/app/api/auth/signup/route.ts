@@ -46,15 +46,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "An account with this email already exists. Please log in." }, { status: 409 });
   }
 
+  const managerEmail = role === "Employee" ? body.managerEmail?.trim().toLowerCase() : "";
   const manager =
-    role === "Employee" && body.managerEmail?.trim()
+    managerEmail
       ? await prisma.user.findUnique({
-          where: { email: body.managerEmail.trim().toLowerCase() },
+          where: { email: managerEmail },
           select: { id: true, role: true },
         })
       : null;
 
-  if (body.managerEmail?.trim() && (!manager || manager.role !== "MANAGER")) {
+  if (managerEmail && (!manager || manager.role !== "MANAGER")) {
     return NextResponse.json({ error: "Manager email must belong to an existing manager account." }, { status: 400 });
   }
 
