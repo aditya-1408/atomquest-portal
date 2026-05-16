@@ -414,7 +414,12 @@ export default function Home() {
   const [hasLoadedDatabase, setHasLoadedDatabase] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
-  const [loginEmail, setLoginEmail] = useState("employee@atomquest.demo");
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [signupName, setSignupName] = useState("");
+  const [signupRole, setSignupRole] = useState<Role>("Employee");
+  const [signupDepartment, setSignupDepartment] = useState("Operations");
+  const [signupManagerEmail, setSignupManagerEmail] = useState("");
+  const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
@@ -508,13 +513,24 @@ export default function Home() {
     setIsLoggingIn(true);
     setLoginError("");
     try {
-      const response = await fetch("/api/auth/login", {
+      const response = await fetch(authMode === "login" ? "/api/auth/login" : "/api/auth/signup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: loginEmail.trim(), password: loginPassword }),
+        body: JSON.stringify(
+          authMode === "login"
+            ? { email: loginEmail.trim(), password: loginPassword }
+            : {
+                name: signupName.trim(),
+                email: loginEmail.trim(),
+                password: loginPassword,
+                role: signupRole,
+                department: signupDepartment.trim(),
+                managerEmail: signupManagerEmail.trim(),
+              },
+        ),
       });
       const result = (await response.json()) as { userId?: string; error?: string };
-      if (!response.ok || !result.userId) throw new Error(result.error ?? "Login failed.");
+      if (!response.ok || !result.userId) throw new Error(result.error ?? "Authentication failed.");
       await loadDatabaseState(result.userId);
       completeLogin(result.userId);
       setLoginPassword("");
@@ -826,13 +842,22 @@ export default function Home() {
     <main className="min-h-screen bg-[#f6f7f9] text-slate-950">
       {!activeUser && (
         <LoginScreen
-          users={state.users}
+          mode={authMode}
+          name={signupName}
           email={loginEmail}
           password={loginPassword}
+          role={signupRole}
+          department={signupDepartment}
+          managerEmail={signupManagerEmail}
           error={loginError || loadError}
           isLoading={!hasLoadedDatabase || isLoggingIn}
+          setMode={setAuthMode}
+          setName={setSignupName}
           setEmail={setLoginEmail}
           setPassword={setLoginPassword}
+          setRole={setSignupRole}
+          setDepartment={setSignupDepartment}
+          setManagerEmail={setSignupManagerEmail}
           login={login}
         />
       )}
@@ -1680,37 +1705,103 @@ function Empty({ text }: { text: string }) {
 }
 
 function LoginScreen({
-  users,
+  mode,
+  name,
   email,
   password,
+  role,
+  department,
+  managerEmail,
   error,
   isLoading,
+  setMode,
+  setName,
   setEmail,
   setPassword,
+  setRole,
+  setDepartment,
+  setManagerEmail,
   login,
 }: {
-  users: User[];
+  mode: "login" | "signup";
+  name: string;
   email: string;
   password: string;
+  role: Role;
+  department: string;
+  managerEmail: string;
   error: string;
   isLoading: boolean;
+  setMode: (mode: "login" | "signup") => void;
+  setName: (name: string) => void;
   setEmail: (email: string) => void;
   setPassword: (password: string) => void;
+  setRole: (role: Role) => void;
+  setDepartment: (department: string) => void;
+  setManagerEmail: (email: string) => void;
   login: () => void;
 }) {
+  const canSubmit =
+    mode === "login"
+      ? Boolean(email && password)
+      : Boolean(name && email && password && role && department);
+
   return (
     <section className="login-shell">
       <div className="login-panel">
         <p className="eyebrow">AtomQuest 1.0</p>
         <h1>Goal Setting & Tracking Portal</h1>
-        <p className="muted">Sign in with the demo credentials assigned for your role.</p>
+        <p className="muted">Create an account or sign in with your existing workplace credentials.</p>
+
+        <div className="auth-tabs">
+          <button className={classNames(mode === "login" && "auth-tab-active")} onClick={() => setMode("login")}>
+            Login
+          </button>
+          <button className={classNames(mode === "signup" && "auth-tab-active")} onClick={() => setMode("signup")}>
+            Sign up
+          </button>
+        </div>
 
         <div className="mt-6 grid gap-4">
+          {mode === "signup" && (
+            <>
+              <Field label="Full Name">
+                <input
+                  value={name}
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="Enter your name"
+                  autoComplete="name"
+                />
+              </Field>
+              <div className="form-grid">
+                <Field label="Role">
+                  <select value={role} onChange={(event) => setRole(event.target.value as Role)}>
+                    <option>Employee</option>
+                    <option>Manager</option>
+                    <option>Admin</option>
+                  </select>
+                </Field>
+                <Field label="Department">
+                  <input value={department} onChange={(event) => setDepartment(event.target.value)} />
+                </Field>
+              </div>
+              {role === "Employee" && (
+                <Field label="Manager Email">
+                  <input
+                    value={managerEmail}
+                    onChange={(event) => setManagerEmail(event.target.value)}
+                    placeholder="manager@company.com"
+                    autoComplete="email"
+                  />
+                </Field>
+              )}
+            </>
+          )}
           <Field label="Email">
             <input
               value={email}
               onChange={(event) => setEmail(event.target.value)}
-              placeholder="employee@atomquest.demo"
+              placeholder="you@company.com"
               autoComplete="email"
             />
           </Field>
@@ -1720,25 +1811,16 @@ function LoginScreen({
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter" && email && password) login();
+                if (event.key === "Enter" && canSubmit) login();
               }}
-              placeholder="Enter demo password"
-              autoComplete="current-password"
+              placeholder={mode === "login" ? "Enter password" : "Create password"}
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
             />
           </Field>
           {error && <div className="alert">{error}</div>}
-          <button className="primary-button" disabled={isLoading || !email || !password} onClick={login}>
-            {isLoading ? "Please wait..." : "Login"}
+          <button className="primary-button" disabled={isLoading || !canSubmit} onClick={login}>
+            {isLoading ? "Please wait..." : mode === "login" ? "Login" : "Create account"}
           </button>
-        </div>
-
-        <div className="mt-6 grid gap-2">
-          {users.map((user) => (
-            <button key={user.id} className="login-persona" onClick={() => setEmail(user.email)}>
-              <span>{user.role}</span>
-              <strong>{user.email}</strong>
-            </button>
-          ))}
         </div>
       </div>
     </section>

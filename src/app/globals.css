@@ -131,6 +131,29 @@ td {
   margin: 0.25rem 0 0.45rem;
 }
 
+.auth-tabs {
+  background: #f1f5f9;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 0.2rem;
+  grid-template-columns: 1fr 1fr;
+  margin-top: 1.25rem;
+  padding: 0.22rem;
+}
+
+.auth-tabs button {
+  border-radius: 6px;
+  color: #475569;
+  font-weight: 800;
+  min-height: 2.25rem;
+}
+
+.auth-tabs .auth-tab-active {
+  background: #2563eb;
+  color: white;
+}
+
 .login-persona {
   align-items: center;
   background: #f8fafc;

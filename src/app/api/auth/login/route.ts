@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createSessionToken, sessionCookieName } from "@/lib/auth";
+import { verifyPassword } from "@/lib/password";
 
 export const runtime = "nodejs";
 
@@ -10,22 +11,16 @@ export async function POST(request: Request) {
     password?: string;
   };
 
-  const demoPassword = process.env.DEMO_LOGIN_PASSWORD;
-
-  if (!demoPassword) {
-    return NextResponse.json({ error: "DEMO_LOGIN_PASSWORD is not configured." }, { status: 500 });
-  }
-
-  if (!email || !password || password !== demoPassword) {
+  if (!email || !password) {
     return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
   }
 
   const user = await prisma.user.findUnique({
     where: { email },
-    select: { id: true },
+    select: { id: true, passwordHash: true },
   });
 
-  if (!user) {
+  if (!user?.passwordHash || !(await verifyPassword(password, user.passwordHash))) {
     return NextResponse.json({ error: "Invalid email or password." }, { status: 401 });
   }
 
