@@ -1814,6 +1814,19 @@ function AdminUsers({
 function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => void }) {
   const activeQuarter = quarterForPhase(state.cycle.phase);
   const escalations = buildEscalations(state);
+  const qoqRows = quarters.map((item) => {
+    const quarterUpdates = state.updates.filter((update) => update.quarter === item);
+    const averageScore =
+      quarterUpdates.length === 0
+        ? 0
+        : Math.round(quarterUpdates.reduce((sum, update) => sum + update.progressScore, 0) / quarterUpdates.length);
+    return {
+      quarter: item,
+      averageScore,
+      completed: quarterUpdates.filter((update) => update.status === "Completed").length,
+      updatedGoals: new Set(quarterUpdates.map((update) => update.goalId)).size,
+    };
+  });
   const byThrust = Object.values(
     state.goals.reduce<Record<string, { name: string; value: number }>>((acc, goal) => {
       acc[goal.thrustArea] = acc[goal.thrustArea] ?? { name: goal.thrustArea, value: 0 };
@@ -1821,10 +1834,28 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
       return acc;
     }, {}),
   );
+  const byUom = Object.values(
+    state.goals.reduce<Record<string, { name: string; value: number }>>((acc, goal) => {
+      acc[goal.uomType] = acc[goal.uomType] ?? { name: goal.uomType, value: 0 };
+      acc[goal.uomType].value += 1;
+      return acc;
+    }, {}),
+  );
   const checkInRows = state.users.filter((user) => user.role === "Employee").map((employee) => ({
     name: employee.name,
     completed: state.checkIns.filter((checkIn) => checkIn.employeeId === employee.id).length,
   }));
+  const managerRows = state.users.filter((user) => user.role === "Manager").map((manager) => {
+    const team = state.users.filter((user) => user.managerId === manager.id);
+    const expected = Math.max(team.length * quarters.length, 1);
+    const completed = state.checkIns.filter((checkIn) => checkIn.managerId === manager.id).length;
+    return {
+      name: manager.name,
+      teamSize: team.length,
+      completed,
+      rate: Math.round((completed / expected) * 100),
+    };
+  });
   return (
     <div className="grid gap-5 lg:grid-cols-2">
       <Panel title="Achievement Report" actions={<button className="primary-button" onClick={exportCsv}><Download size={17} /> CSV</button>}>
@@ -1841,15 +1872,55 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
           </table>
         </div>
       </Panel>
-      <Panel title="Goal Distribution">
-        <div className="space-y-3">
-          {byThrust.map((item, index) => (
-            <div className="distribution-row" key={item.name}>
-              <span className="distribution-dot" style={{ background: palette[index % palette.length] }} />
-              <span className="flex-1">{item.name}</span>
-              <strong>{item.value}</strong>
+      <Panel title="QoQ Achievement Trend">
+        <div className="chart-bars">
+          {qoqRows.map((row) => (
+            <div className="chart-row" key={row.quarter}>
+              <span>{row.quarter}</span>
+              <div className="bar-track wide">
+                <div className="bar-fill-blue" style={{ width: `${row.averageScore}%` }} />
+              </div>
+              <strong>{row.averageScore}%</strong>
             </div>
           ))}
+          <div className="overflow-x-auto">
+            <table>
+              <thead><tr><th>Quarter</th><th>Updated Goals</th><th>Completed Statuses</th></tr></thead>
+              <tbody>
+                {qoqRows.map((row) => (
+                  <tr key={row.quarter}><td>{row.quarter}</td><td>{row.updatedGoals}</td><td>{row.completed}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </Panel>
+      <Panel title="Goal Distribution">
+        <div className="grid gap-5 md:grid-cols-2">
+          <div>
+            <p className="mb-2 text-sm font-semibold text-slate-700">By Thrust Area</p>
+            <div className="space-y-3">
+              {byThrust.map((item, index) => (
+                <div className="distribution-row" key={item.name}>
+                  <span className="distribution-dot" style={{ background: palette[index % palette.length] }} />
+                  <span className="flex-1">{item.name}</span>
+                  <strong>{item.value}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 text-sm font-semibold text-slate-700">By UoM</p>
+            <div className="space-y-3">
+              {byUom.map((item, index) => (
+                <div className="distribution-row" key={item.name}>
+                  <span className="distribution-dot" style={{ background: palette[(index + 2) % palette.length] }} />
+                  <span className="flex-1">{item.name}</span>
+                  <strong>{item.value}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </Panel>
       <Panel title="Check-in Completion">
@@ -1863,6 +1934,23 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
               <strong>{row.completed}</strong>
             </div>
           ))}
+        </div>
+      </Panel>
+      <Panel title="Manager Effectiveness">
+        <div className="chart-bars">
+          {managerRows.map((row) => (
+            <div className="chart-row" key={row.name}>
+              <span>{row.name.split(" ")[0]}</span>
+              <div className="bar-track wide">
+                <div className="bar-fill-green" style={{ width: `${row.rate}%` }} />
+              </div>
+              <strong>{row.rate}%</strong>
+              <p className="col-span-3 text-xs text-slate-500">
+                {row.completed} completed check-ins across {row.teamSize} team member{row.teamSize === 1 ? "" : "s"}
+              </p>
+            </div>
+          ))}
+          {managerRows.length === 0 && <Empty text="No managers exist yet." />}
         </div>
       </Panel>
       <Panel title="Rule-Based Escalation Log">
