@@ -433,6 +433,31 @@ export async function POST(request: Request) {
       }
     }
 
+    const writableEmployeeIds =
+      sessionUser.role === "ADMIN"
+        ? state.users.filter((user) => user.role === "Employee").map((user) => user.id)
+        : sessionUser.role === "MANAGER"
+          ? state.users
+              .filter((user) => user.role === "Employee" && user.managerId === sessionUser.id)
+              .map((user) => user.id)
+          : [sessionUser.id];
+    const incomingGoalIds = new Set(state.goals.map((goal) => goal.id));
+    const staleEditableGoals = await tx.goal.findMany({
+      where: {
+        cycleId: cycle.id,
+        employeeId: { in: writableEmployeeIds },
+        id: { notIn: [...incomingGoalIds] },
+        status: { in: ["DRAFT", "RETURNED"] },
+      },
+      select: { id: true },
+    });
+    const staleGoalIds = staleEditableGoals.map((goal: { id: string }) => goal.id);
+
+    if (staleGoalIds.length > 0) {
+      await tx.quarterlyUpdate.deleteMany({ where: { goalId: { in: staleGoalIds } } });
+      await tx.goal.deleteMany({ where: { id: { in: staleGoalIds } } });
+    }
+
     for (const goal of state.sharedGoals) {
       await tx.sharedGoal.upsert({
         where: { id: goal.id },

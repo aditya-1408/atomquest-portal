@@ -677,6 +677,7 @@ export default function Home() {
   const employeeGoals = selectedEmployee
     ? state.goals.filter((goal) => goal.employeeId === selectedEmployee.id)
     : [];
+  const submittedEmployeeGoals = employeeGoals.filter((goal) => goal.status === "Submitted");
   const ownGoals = activeUser ? state.goals.filter((goal) => goal.employeeId === activeUser.id) : [];
 
   const completeLogin = (userId: string) => {
@@ -918,7 +919,7 @@ export default function Home() {
         {
           ...current,
           goals: current.goals.map((goal) =>
-            goal.employeeId === selectedEmployee.id
+            goal.employeeId === selectedEmployee.id && goal.status === "Submitted"
               ? { ...goal, status: "Approved", locked: true }
               : goal,
           ),
@@ -938,7 +939,7 @@ export default function Home() {
         {
           ...current,
           goals: current.goals.map((goal) =>
-            goal.employeeId === selectedEmployee.id
+            goal.employeeId === selectedEmployee.id && goal.status === "Submitted"
               ? { ...goal, status: "Returned", locked: false }
               : goal,
           ),
@@ -1285,7 +1286,7 @@ export default function Home() {
               team={team}
               selectedEmployee={selectedEmployee}
               setActiveEmployeeId={setActiveEmployeeId}
-              goals={employeeGoals}
+              goals={submittedEmployeeGoals}
               updateGoal={updateGoal}
               isGoalSettingOpen={isGoalSettingOpen}
               approveGoals={() =>
@@ -1763,6 +1764,9 @@ function ManagerApprovals(props: {
             </div>
           </div>
         ))}
+        {props.goals.length === 0 && (
+          <Empty text="No submitted goal sheet is pending for this employee. Returned drafts stay with the employee until they resubmit." />
+        )}
       </div>
       <Field label="Return Comment">
         <textarea value={returnComment} onChange={(e) => setReturnComment(e.target.value)} placeholder="Reason for rework, expected changes, and next action..." />
