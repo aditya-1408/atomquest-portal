@@ -45,6 +45,10 @@ Create accounts from the Sign up tab. Managers and Admin/HR can sign up directly
   - Configurable N-day rules for employee submission, manager approval, and quarterly check-ins.
   - Auto-notification chain display from employee to manager to skip-level / HR.
   - Admin-visible escalation log with owner, level, trigger age, and resolution action.
+- Optional Email and Microsoft Teams notification integration:
+  - Resend email helper for submission, approval, return, check-in, phase change, and reminders.
+  - Teams Adaptive Card webhook helper with Open in AtomQuest deep links.
+  - Weekly Vercel Cron reminder endpoint for pending quarterly updates and manager check-ins.
 
 ## Tech Stack
 
@@ -129,7 +133,34 @@ Open `Admin / HR -> Reports`.
    - `SESSION_SECRET`
    - `NEXTAUTH_SECRET` if you also want a NextAuth-compatible secret name
    - `NEXTAUTH_URL`
+   - `APP_BASE_URL`
+   - `RESEND_API_KEY` for real email notifications
+   - `EMAIL_FROM` using a Resend-verified sender/domain
+   - `TEAMS_WEBHOOK_URL` for Teams Workflow/webhook notifications
+   - `CRON_SECRET` for securing reminder cron calls
 7. Deploy.
+
+## Optional Email and Teams Setup
+
+The app works without these values. Missing notification variables are treated as skipped sends, not app errors.
+
+You provide:
+
+- Resend account and API key.
+- A verified Resend sender/domain for `EMAIL_FROM`.
+- Teams Workflow/webhook URL for `TEAMS_WEBHOOK_URL`.
+- `APP_BASE_URL`, usually the Vercel URL.
+- `CRON_SECRET`, a long random string.
+
+Implemented notification events:
+
+- Goal submitted -> manager email/card.
+- Goal achievement updated -> manager email/card.
+- Goal approved -> employee email/card.
+- Goal returned -> employee email/card.
+- Check-in completed -> employee and manager email/card.
+- Cycle phase changed -> all users email/card.
+- Weekly check-in reminders -> employee and manager email/card.
 
 ## Future Enterprise Upgrade Path
 

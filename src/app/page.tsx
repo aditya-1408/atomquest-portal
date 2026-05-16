@@ -168,6 +168,11 @@ const quarterOpenDates: Record<Quarter, string> = {
   Q4: "2027-03-01",
 };
 
+function initialQueryParam(name: string) {
+  if (typeof window === "undefined") return null;
+  return new URLSearchParams(window.location.search).get(name);
+}
+
 const emptyGoal = (employeeId: string): Goal => ({
   id: crypto.randomUUID(),
   employeeId,
@@ -584,8 +589,8 @@ function buildEscalations(state: AppState, config: EscalationConfig): Escalation
 export default function Home() {
   const [state, setState] = useState<AppState>(seedState);
   const [activeUserId, setActiveUserId] = useState("");
-  const [view, setView] = useState("Dashboard");
-  const [activeEmployeeId, setActiveEmployeeId] = useState("u-employee");
+  const [view, setView] = useState(() => initialQueryParam("view") ?? "Dashboard");
+  const [activeEmployeeId, setActiveEmployeeId] = useState(() => initialQueryParam("employeeId") ?? "u-employee");
   const [quarter, setQuarter] = useState<Quarter>("Q1");
   const [confirmation, setConfirmation] = useState<Confirmation | null>(null);
   const [hasLoadedDatabase, setHasLoadedDatabase] = useState(false);
@@ -744,6 +749,26 @@ export default function Home() {
     setState((current) => updater(current));
   };
 
+  const notifyWorkflow = (payload: {
+    event:
+      | "GOAL_SUBMITTED"
+      | "GOAL_UPDATED"
+      | "GOAL_APPROVED"
+      | "GOAL_RETURNED"
+      | "CHECK_IN_COMPLETED"
+      | "CYCLE_PHASE_CHANGED";
+    employeeId?: string;
+    managerId?: string;
+    phase?: string;
+    comment?: string;
+  }) => {
+    fetch("/api/notifications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    }).catch(() => undefined);
+  };
+
   const addAudit = (current: AppState, action: string, entity: string, before?: string, after?: string) => ({
     ...current,
     auditLogs: [
@@ -814,6 +839,7 @@ export default function Home() {
         phase,
       ),
     );
+    notifyWorkflow({ event: "CYCLE_PHASE_CHANGED", phase });
   };
 
   const changeEmployeeManager = (employeeId: string, managerId: string) => {
@@ -853,6 +879,7 @@ export default function Home() {
         activeUser.name,
       ),
     );
+    notifyWorkflow({ event: "GOAL_SUBMITTED", employeeId: activeUser.id, managerId: activeUser.managerId });
   };
 
   const approveGoals = () => {
@@ -872,6 +899,7 @@ export default function Home() {
         selectedEmployee.name,
       ),
     );
+    notifyWorkflow({ event: "GOAL_APPROVED", employeeId: selectedEmployee.id, managerId: activeUser.id });
   };
 
   const returnGoals = (comment: string) => {
@@ -893,6 +921,7 @@ export default function Home() {
         comment.trim() || "No manager comment provided",
       ),
     );
+    notifyWorkflow({ event: "GOAL_RETURNED", employeeId: selectedEmployee.id, managerId: activeUser.id, comment });
   };
 
   const unlockEmployee = (employeeId: string) => {
@@ -952,6 +981,8 @@ export default function Home() {
         goal.title,
       );
     });
+    const employee = state.users.find((user) => user.id === goal.employeeId);
+    notifyWorkflow({ event: "GOAL_UPDATED", employeeId: goal.employeeId, managerId: employee?.managerId });
   };
 
   const completeCheckIn = (comment: string) => {
@@ -980,6 +1011,7 @@ export default function Home() {
         `${selectedEmployee.name} ${quarter}`,
       );
     });
+    notifyWorkflow({ event: "CHECK_IN_COMPLETED", employeeId: selectedEmployee.id, managerId: activeUser.id });
   };
 
   const pushSharedGoal = (draft: SharedGoalDraft, recipientIds: string[]) => {
