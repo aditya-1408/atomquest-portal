@@ -109,6 +109,18 @@ type Escalation = {
   type: string;
   message: string;
   nextAction: string;
+  ageDays: number;
+  dueAfterDays: number;
+  chainStage: string;
+  notifications: string[];
+};
+
+type EscalationConfig = {
+  employeeSubmissionDays: number;
+  managerApprovalDays: number;
+  quarterlyCheckInDays: number;
+  managerNotifyAfterDays: number;
+  hrNotifyAfterDays: number;
 };
 
 type SharedGoalDraft = {
@@ -140,6 +152,20 @@ const quarters: Quarter[] = ["Q1", "Q2", "Q3", "Q4"];
 const statuses: ProgressStatus[] = ["Not Started", "On Track", "Completed"];
 const palette = ["#2563eb", "#16a34a", "#f59e0b", "#dc2626", "#7c3aed"];
 const cyclePhases = ["Goal Setting", "Q1 Check-in", "Q2 Check-in", "Q3 Check-in", "Q4 / Annual", "Closed"];
+const defaultEscalationConfig: EscalationConfig = {
+  employeeSubmissionDays: 0,
+  managerApprovalDays: 0,
+  quarterlyCheckInDays: 0,
+  managerNotifyAfterDays: 2,
+  hrNotifyAfterDays: 5,
+};
+const cycleOpenDate = "2026-05-01";
+const quarterOpenDates: Record<Quarter, string> = {
+  Q1: "2026-07-01",
+  Q2: "2026-10-01",
+  Q3: "2027-01-01",
+  Q4: "2027-03-01",
+};
 
 const emptyGoal = (employeeId: string): Goal => ({
   id: crypto.randomUUID(),
@@ -422,7 +448,45 @@ function quarterForPhase(phase: string): Quarter | null {
   return null;
 }
 
-function buildEscalations(state: AppState): Escalation[] {
+function daysSince(date: string) {
+  const start = new Date(date);
+  const today = new Date();
+  if (Number.isNaN(start.getTime())) return 0;
+  return Math.max(0, Math.floor((today.getTime() - start.getTime()) / 86_400_000));
+}
+
+function auditDate(state: AppState, action: string, entity: string, fallback: string) {
+  const log = state.auditLogs.find((item) => item.action === action && item.entity === entity);
+  return log?.createdAt.slice(0, 10) ?? fallback;
+}
+
+function escalationChain(
+  ageDays: number,
+  config: EscalationConfig,
+  employee: User,
+  manager?: User,
+) {
+  const managerName = manager?.name ?? "Manager not assigned";
+  const notifications = [`Employee: ${employee.name}`];
+  let chainStage = "Employee";
+  let level = 1;
+
+  if (ageDays >= config.managerNotifyAfterDays) {
+    notifications.push(`Manager: ${managerName}`);
+    chainStage = "Manager";
+    level = 2;
+  }
+
+  if (ageDays >= config.hrNotifyAfterDays) {
+    notifications.push("Skip-level / HR");
+    chainStage = "Skip-level / HR";
+    level = 3;
+  }
+
+  return { chainStage, level, notifications };
+}
+
+function buildEscalations(state: AppState, config: EscalationConfig): Escalation[] {
   const activeQuarter = quarterForPhase(state.cycle.phase);
   const employees = state.users.filter((user) => user.role === "Employee");
   const escalations: Escalation[] = [];
@@ -436,27 +500,45 @@ function buildEscalations(state: AppState): Escalation[] {
 
     if (state.cycle.phase === "Goal Setting") {
       if (hasSubmittedGoals) {
+        const startDate = auditDate(state, "Submitted goal sheet", employee.name, cycleOpenDate);
+        const ageDays = daysSince(startDate);
+        if (ageDays < config.managerApprovalDays) continue;
+        const chain = escalationChain(ageDays, config, employee, manager);
         escalations.push({
           id: `${employee.id}-approval`,
-          level: 1,
-          owner: manager?.name ?? "Unassigned manager",
+          level: chain.level,
+          owner: chain.chainStage === "Employee" ? employee.name : chain.chainStage === "Manager" ? manager?.name ?? "Unassigned manager" : "Admin / HR",
           type: "Manager approval pending",
-          message: `${employee.name}'s submitted goal sheet is awaiting L1 approval.`,
-          nextAction: "Manager should approve and lock or return for rework.",
+          message: `${employee.name}'s submitted goal sheet has been pending L1 approval for ${ageDays} day${ageDays === 1 ? "" : "s"}.`,
+          nextAction: "Notify through escalation chain until Manager approves and locks or returns for rework.",
+          ageDays,
+          dueAfterDays: config.managerApprovalDays,
+          chainStage: chain.chainStage,
+          notifications: chain.notifications,
         });
       } else if (hasDraftGoals || goals.length === 0) {
+        const ageDays = daysSince(cycleOpenDate);
+        if (ageDays < config.employeeSubmissionDays) continue;
+        const chain = escalationChain(ageDays, config, employee, manager);
         escalations.push({
           id: `${employee.id}-submission`,
-          level: 1,
-          owner: employee.name,
+          level: chain.level,
+          owner: chain.chainStage === "Employee" ? employee.name : chain.chainStage === "Manager" ? manager?.name ?? "Unassigned manager" : "Admin / HR",
           type: "Employee submission pending",
-          message: `${employee.name} has not submitted a complete goal sheet for the active cycle.`,
-          nextAction: "Employee should complete goals with 100% total weightage and submit.",
+          message: `${employee.name} has not submitted a complete goal sheet ${ageDays} day${ageDays === 1 ? "" : "s"} after cycle open.`,
+          nextAction: "Notify through escalation chain until Employee submits goals with 100% total weightage.",
+          ageDays,
+          dueAfterDays: config.employeeSubmissionDays,
+          chainStage: chain.chainStage,
+          notifications: chain.notifications,
         });
       }
     }
 
     if (activeQuarter && hasApprovedGoals) {
+      const ageDays = daysSince(quarterOpenDates[activeQuarter]);
+      if (ageDays < config.quarterlyCheckInDays) continue;
+      const chain = escalationChain(ageDays, config, employee, manager);
       const approvedGoals = goals.filter((goal) => goal.status === "Approved");
       const missingUpdates = approvedGoals.filter(
         (goal) => !state.updates.some((update) => update.goalId === goal.id && update.quarter === activeQuarter),
@@ -468,20 +550,28 @@ function buildEscalations(state: AppState): Escalation[] {
       if (missingUpdates.length > 0) {
         escalations.push({
           id: `${employee.id}-${activeQuarter}-updates`,
-          level: 1,
-          owner: employee.name,
+          level: chain.level,
+          owner: chain.chainStage === "Employee" ? employee.name : chain.chainStage === "Manager" ? manager?.name ?? "Unassigned manager" : "Admin / HR",
           type: `${activeQuarter} achievement pending`,
-          message: `${employee.name} has ${missingUpdates.length} approved goal update${missingUpdates.length === 1 ? "" : "s"} pending for ${activeQuarter}.`,
-          nextAction: "Employee should enter actual achievement, status, and comment.",
+          message: `${employee.name} has ${missingUpdates.length} approved goal update${missingUpdates.length === 1 ? "" : "s"} pending ${ageDays} day${ageDays === 1 ? "" : "s"} into the active ${activeQuarter} window.`,
+          nextAction: "Notify through escalation chain until Employee enters actual achievement, status, and comment.",
+          ageDays,
+          dueAfterDays: config.quarterlyCheckInDays,
+          chainStage: chain.chainStage,
+          notifications: chain.notifications,
         });
       } else if (!checkInDone) {
         escalations.push({
           id: `${employee.id}-${activeQuarter}-checkin`,
-          level: 2,
-          owner: manager?.name ?? "Unassigned manager",
+          level: chain.level,
+          owner: chain.chainStage === "Employee" ? employee.name : chain.chainStage === "Manager" ? manager?.name ?? "Unassigned manager" : "Admin / HR",
           type: `${activeQuarter} manager check-in pending`,
-          message: `${employee.name}'s ${activeQuarter} achievements are updated, but the manager check-in is not completed.`,
-          nextAction: "Manager should review planned vs actual and record the structured check-in comment.",
+          message: `${employee.name}'s ${activeQuarter} achievements are updated, but the manager check-in is not completed ${ageDays} day${ageDays === 1 ? "" : "s"} into the active window.`,
+          nextAction: "Notify through escalation chain until Manager records the structured check-in comment.",
+          ageDays,
+          dueAfterDays: config.quarterlyCheckInDays,
+          chainStage: chain.chainStage,
+          notifications: chain.notifications,
         });
       }
     }
@@ -1812,8 +1902,9 @@ function AdminUsers({
 }
 
 function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => void }) {
+  const [escalationConfig, setEscalationConfig] = useState<EscalationConfig>(defaultEscalationConfig);
   const activeQuarter = quarterForPhase(state.cycle.phase);
-  const escalations = buildEscalations(state);
+  const escalations = buildEscalations(state, escalationConfig);
   const employees = state.users.filter((user) => user.role === "Employee");
   const managers = state.users.filter((user) => user.role === "Manager");
   const averageForGoals = (goals: Goal[], quarter: Quarter) => {
@@ -2069,6 +2160,64 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
         </div>
       </Panel>
       <Panel title="Rule-Based Escalation Log">
+        <div className="mb-5 rounded-md border border-slate-200 bg-slate-50 p-4">
+          <p className="mb-3 text-sm font-semibold text-slate-700">Configurable Escalation Rules</p>
+          <div className="form-grid">
+            <Field label="Employee Submission N Days">
+              <input
+                type="number"
+                min={0}
+                value={escalationConfig.employeeSubmissionDays}
+                onChange={(event) =>
+                  setEscalationConfig({ ...escalationConfig, employeeSubmissionDays: Number(event.target.value) })
+                }
+              />
+            </Field>
+            <Field label="Manager Approval N Days">
+              <input
+                type="number"
+                min={0}
+                value={escalationConfig.managerApprovalDays}
+                onChange={(event) =>
+                  setEscalationConfig({ ...escalationConfig, managerApprovalDays: Number(event.target.value) })
+                }
+              />
+            </Field>
+            <Field label="Quarterly Check-in N Days">
+              <input
+                type="number"
+                min={0}
+                value={escalationConfig.quarterlyCheckInDays}
+                onChange={(event) =>
+                  setEscalationConfig({ ...escalationConfig, quarterlyCheckInDays: Number(event.target.value) })
+                }
+              />
+            </Field>
+            <Field label="Notify Manager After">
+              <input
+                type="number"
+                min={0}
+                value={escalationConfig.managerNotifyAfterDays}
+                onChange={(event) =>
+                  setEscalationConfig({ ...escalationConfig, managerNotifyAfterDays: Number(event.target.value) })
+                }
+              />
+            </Field>
+            <Field label="Notify HR After">
+              <input
+                type="number"
+                min={0}
+                value={escalationConfig.hrNotifyAfterDays}
+                onChange={(event) =>
+                  setEscalationConfig({ ...escalationConfig, hrNotifyAfterDays: Number(event.target.value) })
+                }
+              />
+            </Field>
+          </div>
+          <p className="mt-3 text-xs text-slate-600">
+            Defaults trigger immediately for demo visibility. Increase N days to simulate stricter cycle-window rules.
+          </p>
+        </div>
         <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
           Active rule set: {state.cycle.phase === "Goal Setting" ? "goal submission and L1 approval" : activeQuarter ? `${activeQuarter} achievement and check-in completion` : "cycle closed"}.
         </div>
@@ -2080,9 +2229,14 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
                 <div className="flex flex-wrap items-center gap-2">
                   <strong>{item.type}</strong>
                   <span className="status-badge">Level {item.level}</span>
+                  <span className="status-badge">{item.chainStage}</span>
                 </div>
                 <p>{item.message}</p>
-                <p className="text-xs text-slate-600">Owner: {item.owner} | Next action: {item.nextAction}</p>
+                <p className="text-xs text-slate-600">
+                  Owner: {item.owner} | Trigger: {item.ageDays} day{item.ageDays === 1 ? "" : "s"} old / N={item.dueAfterDays}
+                </p>
+                <p className="text-xs text-slate-600">Auto-notification chain: {item.notifications.join(" -> ")}</p>
+                <p className="text-xs text-slate-600">Resolution: {item.nextAction}</p>
               </div>
             </div>
           ))}
