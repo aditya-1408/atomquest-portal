@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getSessionUser } from "@/lib/auth";
 import { atomQuestLink, sendNotification } from "@/lib/notifications";
 import { prisma } from "@/lib/prisma";
 
@@ -146,7 +147,36 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized cron request." }, { status: 401 });
   }
 
-  const rule = escalationRule();
+  return runEscalationNotifications(escalationRule());
+}
+
+export async function POST(request: Request) {
+  const sessionUser = await getSessionUser();
+  if (!sessionUser) {
+    return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+  }
+  if (sessionUser.role !== "ADMIN") {
+    return NextResponse.json({ error: "Only Admin / HR can run escalation notifications." }, { status: 403 });
+  }
+
+  const body = (await request.json().catch(() => ({}))) as Partial<EscalationRule>;
+  const rule: EscalationRule = {
+    employeeSubmissionDays: sanitizeRuleNumber(body.employeeSubmissionDays, 0),
+    managerApprovalDays: sanitizeRuleNumber(body.managerApprovalDays, 0),
+    quarterlyCheckInDays: sanitizeRuleNumber(body.quarterlyCheckInDays, 0),
+    managerNotifyAfterDays: sanitizeRuleNumber(body.managerNotifyAfterDays, 0),
+    hrNotifyAfterDays: sanitizeRuleNumber(body.hrNotifyAfterDays, 0),
+  };
+
+  return runEscalationNotifications(rule, sessionUser.id);
+}
+
+function sanitizeRuleNumber(value: unknown, fallback: number) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+async function runEscalationNotifications(rule: EscalationRule, actorId?: string) {
   const cycle = await prisma.cycle.findFirst({ orderBy: { createdAt: "asc" } });
   if (!cycle || cycle.phase === "CLOSED") {
     return NextResponse.json({ ok: true, sent: 0, reason: "No active escalation phase." });
@@ -292,7 +322,7 @@ export async function GET(request: Request) {
 
     await prisma.auditLog.create({
       data: {
-        actorId: item.manager?.id ?? item.admins[0]?.id ?? item.employee.id,
+        actorId: actorId ?? item.manager?.id ?? item.admins[0]?.id ?? item.employee.id,
         entityType: "Escalation",
         entityId: item.employee.id,
         action: `Escalation notification ${item.type}`,

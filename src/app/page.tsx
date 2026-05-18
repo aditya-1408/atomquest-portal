@@ -2073,6 +2073,8 @@ function AdminUsers({
 
 function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => void }) {
   const [escalationConfig, setEscalationConfig] = useState<EscalationConfig>(defaultEscalationConfig);
+  const [escalationRulesLocked, setEscalationRulesLocked] = useState(false);
+  const [escalationRunStatus, setEscalationRunStatus] = useState("");
   const activeQuarter = quarterForPhase(state.cycle.phase);
   const escalations = buildEscalations(state, escalationConfig);
   const employees = state.users.filter((user) => user.role === "Employee");
@@ -2195,6 +2197,36 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
       rate: Math.round((completed / expected) * 100),
     };
   });
+
+  const sendEscalationNotifications = async () => {
+    if (!escalationRulesLocked) {
+      setEscalationRunStatus("Lock the escalation rules before sending notifications.");
+      return;
+    }
+
+    setEscalationRunStatus("Sending escalation notifications...");
+    try {
+      const response = await fetch("/api/cron/reminders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(escalationConfig),
+      });
+      const result = (await response.json()) as { generated?: number; sent?: number; error?: string };
+      if (!response.ok) throw new Error(result.error ?? "Could not send escalation notifications.");
+      setEscalationRunStatus(
+        `Escalation run complete: ${result.generated ?? 0} rule match${result.generated === 1 ? "" : "es"}, ${result.sent ?? 0} notification${result.sent === 1 ? "" : "s"} sent.`,
+      );
+    } catch (error) {
+      setEscalationRunStatus(error instanceof Error ? error.message : "Escalation notification run failed.");
+    }
+  };
+
+  const updateEscalationConfig = (patch: Partial<EscalationConfig>) => {
+    if (escalationRulesLocked) return;
+    setEscalationConfig({ ...escalationConfig, ...patch });
+    setEscalationRunStatus("");
+  };
+
   return (
     <div className="grid gap-5 lg:grid-cols-2">
       <Panel title="Achievement Report" actions={<button className="primary-button" onClick={exportCsv}><Download size={17} /> CSV</button>}>
@@ -2331,15 +2363,21 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
       </Panel>
       <Panel title="Rule-Based Escalation Log">
         <div className="mb-5 rounded-md border border-slate-200 bg-slate-50 p-4">
-          <p className="mb-3 text-sm font-semibold text-slate-700">Configurable Escalation Rules</p>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-sm font-semibold text-slate-700">Configurable Escalation Rules</p>
+            <span className={classNames("status-badge", escalationRulesLocked ? "status-approved" : "status-draft")}>
+              {escalationRulesLocked ? "Rules locked" : "Editable"}
+            </span>
+          </div>
           <div className="form-grid">
             <Field label="Employee Submission N Days">
               <input
                 type="number"
                 min={0}
+                disabled={escalationRulesLocked}
                 value={escalationConfig.employeeSubmissionDays}
                 onChange={(event) =>
-                  setEscalationConfig({ ...escalationConfig, employeeSubmissionDays: Number(event.target.value) })
+                  updateEscalationConfig({ employeeSubmissionDays: Number(event.target.value) })
                 }
               />
             </Field>
@@ -2347,9 +2385,10 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
               <input
                 type="number"
                 min={0}
+                disabled={escalationRulesLocked}
                 value={escalationConfig.managerApprovalDays}
                 onChange={(event) =>
-                  setEscalationConfig({ ...escalationConfig, managerApprovalDays: Number(event.target.value) })
+                  updateEscalationConfig({ managerApprovalDays: Number(event.target.value) })
                 }
               />
             </Field>
@@ -2357,9 +2396,10 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
               <input
                 type="number"
                 min={0}
+                disabled={escalationRulesLocked}
                 value={escalationConfig.quarterlyCheckInDays}
                 onChange={(event) =>
-                  setEscalationConfig({ ...escalationConfig, quarterlyCheckInDays: Number(event.target.value) })
+                  updateEscalationConfig({ quarterlyCheckInDays: Number(event.target.value) })
                 }
               />
             </Field>
@@ -2367,9 +2407,10 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
               <input
                 type="number"
                 min={0}
+                disabled={escalationRulesLocked}
                 value={escalationConfig.managerNotifyAfterDays}
                 onChange={(event) =>
-                  setEscalationConfig({ ...escalationConfig, managerNotifyAfterDays: Number(event.target.value) })
+                  updateEscalationConfig({ managerNotifyAfterDays: Number(event.target.value) })
                 }
               />
             </Field>
@@ -2377,15 +2418,31 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
               <input
                 type="number"
                 min={0}
+                disabled={escalationRulesLocked}
                 value={escalationConfig.hrNotifyAfterDays}
                 onChange={(event) =>
-                  setEscalationConfig({ ...escalationConfig, hrNotifyAfterDays: Number(event.target.value) })
+                  updateEscalationConfig({ hrNotifyAfterDays: Number(event.target.value) })
                 }
               />
             </Field>
           </div>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              className={escalationRulesLocked ? "secondary-button" : "primary-button"}
+              onClick={() => {
+                setEscalationRulesLocked((locked) => !locked);
+                setEscalationRunStatus("");
+              }}
+            >
+              <Lock size={16} /> {escalationRulesLocked ? "Unlock rules" : "Lock rules"}
+            </button>
+            <button className="primary-button" disabled={!escalationRulesLocked} onClick={sendEscalationNotifications}>
+              <Send size={16} /> Send escalation notifications
+            </button>
+          </div>
+          {escalationRunStatus && <p className="mt-3 text-sm font-semibold text-slate-700">{escalationRunStatus}</p>}
           <p className="mt-3 text-xs text-slate-600">
-            Defaults trigger immediately for demo visibility. Increase N days to simulate stricter cycle-window rules.
+            Locking rules sends these exact values to the server escalation engine. Set days to 0 for a live demo, or increase N days for stricter company policy.
           </p>
         </div>
         <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
