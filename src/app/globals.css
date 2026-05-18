@@ -26,8 +26,12 @@
 
 body {
   background:
-    linear-gradient(180deg, rgba(248, 250, 252, 0.82), rgba(236, 245, 240, 0.92)),
-    url("/bg2_warm_slate.svg") center / cover fixed,
+    linear-gradient(
+      180deg,
+      rgba(248, 250, 252, 0.82),
+      rgba(236, 245, 240, 0.92)
+    ),
+    url("/bg2_warm_slate.svg") center / cover,
     var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
@@ -50,7 +54,10 @@ textarea {
   padding: 0.58rem 0.7rem;
   color: #0f172a;
   outline: none;
-  transition: border-color 140ms ease, box-shadow 140ms ease, background 140ms ease;
+  transition:
+    border-color 140ms ease,
+    box-shadow 140ms ease,
+    background 140ms ease;
 }
 
 input:focus,
@@ -128,10 +135,15 @@ td {
 
 .app-shell {
   background:
-    linear-gradient(180deg, rgba(244, 247, 249, 0.9), rgba(235, 244, 240, 0.94)),
-    url("/bg4_deep_indigo.svg") right top / 54rem auto no-repeat fixed,
-    url("/bg2_warm_slate.svg") left bottom / cover no-repeat fixed,
+    linear-gradient(
+      180deg,
+      rgba(244, 247, 249, 0.9),
+      rgba(235, 244, 240, 0.94)
+    ),
+    url("/bg4_deep_indigo.svg") right top / 54rem auto no-repeat,
+    url("/bg2_warm_slate.svg") left bottom / cover no-repeat,
     #eef3f0;
+  min-height: 100vh;
   position: relative;
 }
 
@@ -139,9 +151,9 @@ td {
   background: url("/bg3_emerald_ops.svg") left 8rem / 46rem auto no-repeat;
   content: "";
   inset: 0;
-  opacity: 0.2;
+  opacity: 0.16;
   pointer-events: none;
-  position: fixed;
+  position: absolute;
 }
 
 .app-header {
@@ -182,7 +194,12 @@ td {
 .login-shell {
   align-items: center;
   background:
-    linear-gradient(90deg, rgba(4, 47, 46, 0.76), rgba(15, 23, 42, 0.28) 44%, rgba(244, 247, 246, 0.9) 58%),
+    linear-gradient(
+      90deg,
+      rgba(4, 47, 46, 0.76),
+      rgba(15, 23, 42, 0.28) 44%,
+      rgba(244, 247, 246, 0.9) 58%
+    ),
     url("/atomquest_bg_sideloaded.svg") left center / cover no-repeat,
     url("/bg3_emerald_ops.svg") center / cover no-repeat;
   display: grid;
@@ -195,7 +212,11 @@ td {
 }
 
 .login-shell::before {
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0));
+  background: linear-gradient(
+    135deg,
+    rgba(255, 255, 255, 0.22),
+    rgba(255, 255, 255, 0)
+  );
   content: "";
   inset: 0;
   pointer-events: none;
@@ -247,7 +268,10 @@ td {
   justify-content: center;
   min-height: 2.65rem;
   padding: 0.64rem 0.9rem;
-  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+  transition:
+    border-color 120ms ease,
+    box-shadow 120ms ease,
+    transform 120ms ease;
   width: 100%;
 }
 
@@ -347,13 +371,20 @@ td {
   justify-content: flex-start;
   padding: 0.72rem 0.8rem;
   text-align: left;
-  transition: background 120ms ease, color 120ms ease, transform 120ms ease;
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    transform 120ms ease;
   width: 100%;
 }
 
 .nav-button:hover,
 .nav-button-active {
-  background: linear-gradient(90deg, rgba(37, 99, 235, 0.12), rgba(5, 150, 105, 0.08));
+  background: linear-gradient(
+    90deg,
+    rgba(37, 99, 235, 0.12),
+    rgba(5, 150, 105, 0.08)
+  );
   color: #1d4ed8;
   transform: translateX(2px);
 }
@@ -405,7 +436,11 @@ td {
 
 .metric-icon {
   align-items: center;
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.12), rgba(5, 150, 105, 0.14));
+  background: linear-gradient(
+    135deg,
+    rgba(37, 99, 235, 0.12),
+    rgba(5, 150, 105, 0.14)
+  );
   border-radius: 6px;
   color: #047857;
   display: inline-flex;
@@ -451,7 +486,11 @@ td {
   font-weight: 700;
   gap: 0.45rem;
   justify-content: center;
-  transition: transform 120ms ease, background 120ms ease, border 120ms ease, box-shadow 120ms ease;
+  transition:
+    transform 120ms ease,
+    background 120ms ease,
+    border 120ms ease,
+    box-shadow 120ms ease;
 }
 
 .primary-button {
@@ -495,17 +534,44 @@ td {
 }
 
 .header-action-button {
-  background: rgba(255, 255, 255, 0.84);
-  border: 1px solid rgba(203, 213, 225, 0.82);
-  color: #334155;
-  min-height: 2.4rem;
-  padding: 0.55rem 0.78rem;
+  border: 1px solid transparent;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.1);
+  min-height: 2.6rem;
+  padding: 0.62rem 0.95rem;
   white-space: nowrap;
 }
 
-.header-action-button:hover {
-  background: white;
-  border-color: #94a3b8;
+.header-refresh-button {
+  background: linear-gradient(
+    135deg,
+    rgba(236, 253, 245, 0.98),
+    rgba(209, 250, 229, 0.98)
+  );
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #047857;
+}
+
+.header-refresh-button:hover {
+  background: linear-gradient(135deg, #bbf7d0, #99f6e4);
+  border-color: rgba(5, 150, 105, 0.58);
+  box-shadow: 0 16px 32px rgba(16, 185, 129, 0.28);
+  transform: translateY(-1px);
+}
+
+.header-logout-button {
+  background: linear-gradient(
+    135deg,
+    rgba(254, 242, 242, 0.98),
+    rgba(254, 202, 202, 0.98)
+  );
+  border-color: rgba(239, 68, 68, 0.45);
+  color: #b91c1c;
+}
+
+.header-logout-button:hover {
+  background: linear-gradient(135deg, #fecaca, #fca5a5);
+  border-color: rgba(220, 38, 38, 0.7);
+  box-shadow: 0 16px 32px rgba(239, 68, 68, 0.3);
   transform: translateY(-1px);
 }
 
@@ -675,7 +741,11 @@ td {
 @media (max-width: 900px) {
   .login-shell {
     background:
-      linear-gradient(180deg, rgba(5, 46, 43, 0.62), rgba(244, 247, 246, 0.94) 42%),
+      linear-gradient(
+        180deg,
+        rgba(5, 46, 43, 0.62),
+        rgba(244, 247, 246, 0.94) 42%
+      ),
       url("/atomquest_bg_sideloaded.svg") center top / cover no-repeat;
     grid-template-columns: 1fr;
   }
@@ -689,7 +759,11 @@ td {
 @media (max-width: 720px) {
   .app-shell {
     background:
-      linear-gradient(180deg, rgba(244, 247, 249, 0.94), rgba(235, 244, 240, 0.98)),
+      linear-gradient(
+        180deg,
+        rgba(244, 247, 249, 0.94),
+        rgba(235, 244, 240, 0.98)
+      ),
       url("/bg2_warm_slate.svg") center / cover fixed,
       #eef3f0;
   }

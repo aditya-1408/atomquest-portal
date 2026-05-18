@@ -48,7 +48,7 @@
 
   <text x="70" y="72" class="kicker">ATOMQUEST 1.0</text>
   <text x="70" y="126" class="title">Goal Setting &amp; Tracking Portal - Production Architecture</text>
-  <text x="70" y="161" class="subtitle">Hosted Next.js portal with real auth, Neon PostgreSQL persistence, role workflows, governance, analytics, escalations, CSV export, and notifications.</text>
+  <text x="70" y="161" class="subtitle">Hosted Next.js portal with real auth, Microsoft Entra SSO, Graph hierarchy sync, Neon persistence, analytics, escalations, CSV export, and notifications.</text>
   <rect x="1395" y="58" width="335" height="82" rx="14" fill="#ffffff" opacity="0.94"/>
   <text x="1420" y="92" class="smallTitle">Deliverables</text>
   <text x="1420" y="119" class="body">Live URL + GitHub repo + demo credentials</text>
@@ -65,7 +65,8 @@
   <rect x="86" y="435" width="210" height="56" rx="12" fill="#fff7ed" stroke="#fed7aa"/>
   <text x="108" y="459" class="smallTitle">Admin / HR</text>
   <text x="108" y="480" class="body">cycles, hierarchy, reports</text>
-  <text x="86" y="520" class="tiny">HTTP-only signed session cookie</text>
+  <text x="86" y="512" class="tiny">Portal login or Microsoft SSO</text>
+  <text x="86" y="532" class="tiny">HTTP-only signed session cookie</text>
 
   <!-- Frontend -->
   <rect x="390" y="210" width="355" height="350" rx="20" class="card"/>
@@ -74,43 +75,53 @@
   <text x="420" y="308" class="body">Role-based dashboard navigation</text>
   <text x="420" y="335" class="body">Responsive desktop-first demo experience</text>
   <rect x="420" y="365" width="285" height="44" rx="10" fill="url(#blueGreen)"/>
-  <text x="445" y="393" class="whiteTitle">Real Signup / Login / Logout</text>
+  <text x="445" y="393" class="whiteTitle">Portal Auth + Microsoft SSO</text>
   <rect x="420" y="428" width="285" height="82" rx="12" fill="#f8fafc" stroke="#dbe4ea"/>
   <text x="443" y="456" class="smallTitle">Client State Sync</text>
   <text x="443" y="480" class="body">Debounced save to API</text>
   <text x="443" y="502" class="body">Refresh button reloads live DB state</text>
+  <text x="443" y="532" class="body">SSO success routes to role dashboard</text>
 
   <!-- API -->
   <rect x="805" y="210" width="365" height="350" rx="20" class="darkCard"/>
   <text x="835" y="248" class="whiteTitle">Server / API Layer</text>
-  <text x="835" y="281" class="whiteBody">/api/auth/signup, login, logout, session</text>
-  <text x="835" y="308" class="whiteBody">/api/state scoped by current user role</text>
-  <text x="835" y="335" class="whiteBody">/api/notifications workflow events</text>
-  <text x="835" y="362" class="whiteBody">/api/cron/reminders for scheduled reminders</text>
+  <text x="835" y="281" class="whiteBody">/api/auth signup, login, logout, session</text>
+  <text x="835" y="308" class="whiteBody">/api/auth/sso login, callback, status</text>
+  <text x="835" y="335" class="whiteBody">/api/state scoped by current user role</text>
+  <text x="835" y="362" class="whiteBody">/api/cron/reminders uses locked rules</text>
   <rect x="835" y="392" width="305" height="126" rx="12" fill="#12364a" stroke="#2dd4bf" stroke-opacity=".35"/>
   <text x="858" y="421" class="whiteTitle">Business Rules Enforced</text>
   <text x="858" y="448" class="whiteBody">100% total weightage</text>
   <text x="858" y="472" class="whiteBody">minimum 10% per goal, maximum 8 goals</text>
   <text x="858" y="496" class="whiteBody">phase locks, approval locks, admin unlock</text>
+  <text x="858" y="520" class="whiteBody">auto-escalation employee -> manager -> HR</text>
 
   <!-- Data -->
   <rect x="1235" y="210" width="500" height="350" rx="20" class="card"/>
   <text x="1265" y="248" class="section">Neon PostgreSQL + Prisma</text>
   <text x="1265" y="281" class="body">Normalized production tables with Prisma Client</text>
   <text x="1265" y="309" class="body">Users, Cycle, Goals, SharedGoals, Updates</text>
-  <text x="1265" y="337" class="body">CheckIns, AuditLogs, EscalationLogs</text>
+  <text x="1265" y="337" class="body">CheckIns, AuditLogs, EscalationLogs, SSO sync audit</text>
   <rect x="1265" y="368" width="210" height="54" rx="12" fill="#eff6ff" stroke="#bfdbfe"/>
   <text x="1287" y="401" class="smallTitle">Password hashes</text>
   <rect x="1490" y="368" width="210" height="54" rx="12" fill="#ecfdf5" stroke="#bbf7d0"/>
-  <text x="1512" y="401" class="smallTitle">Role hierarchy</text>
+  <text x="1512" y="401" class="smallTitle">Azure role hierarchy</text>
   <rect x="1265" y="440" width="435" height="72" rx="12" fill="#f8fafc" stroke="#dbe4ea"/>
   <text x="1288" y="468" class="smallTitle">Persistence Guarantees</text>
   <text x="1288" y="492" class="body">Submits, edits, approvals, updates, check-ins,</text>
-  <text x="1288" y="515" class="body">and audit entries are stored in the live DB.</text>
+  <text x="1288" y="515" class="body">Entra role, manager sync, audit entries persist.</text>
 
   <path d="M325 380 C350 380, 360 380, 390 380" class="line"/>
   <path d="M745 380 C770 380, 780 380, 805 380" class="line"/>
   <path d="M1170 380 C1200 380, 1210 380, 1235 380" class="line"/>
+
+  <!-- Microsoft identity integration -->
+  <rect x="458" y="532" width="330" height="74" rx="18" fill="#ffffff" opacity="0.95" filter="url(#smallShadow)"/>
+  <text x="485" y="559" class="smallTitle">Microsoft Entra ID + Graph</text>
+  <text x="485" y="581" class="body">OAuth SSO, /me profile, /me/manager</text>
+  <text x="485" y="600" class="body">Group membership maps Admin / Manager / Employee</text>
+  <path d="M610 532 C650 505, 720 480, 805 440" class="line"/>
+  <path d="M788 572 C940 595, 1110 585, 1235 520" class="line"/>
 
   <!-- Workflow swimlane -->
   <rect x="60" y="625" width="1675" height="225" rx="22" fill="#ffffff" opacity="0.95" filter="url(#shadow)"/>
@@ -186,12 +197,13 @@
 
   <rect x="1210" y="895" width="525" height="230" rx="20" class="card"/>
   <text x="1240" y="933" class="section">Bonus Modules &amp; Integrations</text>
-  <text x="1240" y="970" class="body">Rule-based escalation: employee -> manager -> skip-level / HR</text>
-  <text x="1240" y="997" class="body">Escalation log visible to Admin / HR for tracking resolution</text>
-  <text x="1240" y="1024" class="body">Resend email notifications for submit and achievement updates</text>
-  <text x="1240" y="1051" class="body">Optional Teams webhook adaptive-card pipeline</text>
-  <text x="1240" y="1078" class="body">Deep links route managers directly to approval / check-in context</text>
-  <text x="1240" y="1105" class="body">Cost-aware hosting: Vercel + Neon serverless free-tier friendly</text>
+  <text x="1240" y="965" class="body">Microsoft Entra SSO via OAuth authorization code flow</text>
+  <text x="1240" y="990" class="body">Graph manager sync derives employee reporting lines</text>
+  <text x="1240" y="1015" class="body">Azure group membership maps Admin / Manager / Employee</text>
+  <text x="1240" y="1040" class="body">Locked escalation rules auto-run employee -> manager -> HR</text>
+  <text x="1240" y="1065" class="body">Resend workflow and escalation emails with deep links</text>
+  <text x="1240" y="1090" class="body">Optional Teams webhook adaptive-card pipeline</text>
+  <text x="1240" y="1115" class="body">Cost-aware hosting: Vercel + Neon serverless free-tier friendly</text>
 
   <!-- Integrations -->
   <rect x="1240" y="585" width="225" height="56" rx="28" fill="#ffffff" opacity="0.94"/>
@@ -201,5 +213,5 @@
   <text x="1517" y="620" class="pillText">Teams Webhook Ready</text>
   <path d="M1138 548 C1258 560, 1358 586, 1490 612" class="line"/>
 
-  <text x="70" y="1162" class="subtitle">Live: atomquest-portal.vercel.app | Source: github.com/aditya-1408/atomquest-portal | Stack: Next.js + Tailwind + Prisma + Neon + Vercel + Resend</text>
+  <text x="70" y="1162" class="subtitle">Live: atomquest-portal.vercel.app | Source: github.com/aditya-1408/atomquest-portal | Stack: Next.js + Tailwind + Prisma + Neon + Vercel + Resend + Microsoft Entra ID</text>
 </svg>
