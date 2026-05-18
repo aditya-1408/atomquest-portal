@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import {
   azureGroupNames,
@@ -12,7 +11,7 @@ import {
 } from "@/lib/azure-ad";
 import { createSessionToken, sessionCookieName } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { ssoStateCookieName } from "../login/route";
+import { verifySsoState } from "@/lib/sso-state";
 
 export const runtime = "nodejs";
 
@@ -41,9 +40,7 @@ export async function GET(request: Request) {
   if (azureError) return redirectWithError(request, azureError);
   if (!code || !state) return redirectWithError(request, "Microsoft SSO callback was missing code or state.");
 
-  const cookieStore = await cookies();
-  const expectedState = cookieStore.get(ssoStateCookieName)?.value;
-  if (!expectedState || expectedState !== state) {
+  if (!verifySsoState(state)) {
     return redirectWithError(request, "Microsoft SSO state check failed. Please try again.");
   }
 
@@ -125,13 +122,6 @@ export async function GET(request: Request) {
       secure: process.env.NODE_ENV === "production",
       path: "/",
       maxAge: 60 * 60 * 8,
-    });
-    response.cookies.set(ssoStateCookieName, "", {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: process.env.NODE_ENV === "production",
-      path: "/",
-      maxAge: 0,
     });
     return response;
   } catch (error) {
