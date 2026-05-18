@@ -2198,13 +2198,8 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
     };
   });
 
-  const sendEscalationNotifications = async () => {
-    if (!escalationRulesLocked) {
-      setEscalationRunStatus("Lock the escalation rules before sending notifications.");
-      return;
-    }
-
-    setEscalationRunStatus("Sending escalation notifications...");
+  const lockEscalationRules = async () => {
+    setEscalationRunStatus("Locking rules and starting automatic escalation check...");
     try {
       const response = await fetch("/api/cron/reminders", {
         method: "POST",
@@ -2212,12 +2207,13 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
         body: JSON.stringify(escalationConfig),
       });
       const result = (await response.json()) as { generated?: number; sent?: number; error?: string };
-      if (!response.ok) throw new Error(result.error ?? "Could not send escalation notifications.");
+      if (!response.ok) throw new Error(result.error ?? "Could not lock escalation rules.");
+      setEscalationRulesLocked(true);
       setEscalationRunStatus(
-        `Escalation run complete: ${result.generated ?? 0} rule match${result.generated === 1 ? "" : "es"}, ${result.sent ?? 0} notification${result.sent === 1 ? "" : "s"} sent.`,
+        `Rules locked. Automatic check found ${result.generated ?? 0} overdue case${result.generated === 1 ? "" : "s"} and sent ${result.sent ?? 0} notification${result.sent === 1 ? "" : "s"}.`,
       );
     } catch (error) {
-      setEscalationRunStatus(error instanceof Error ? error.message : "Escalation notification run failed.");
+      setEscalationRunStatus(error instanceof Error ? error.message : "Escalation rule lock failed.");
     }
   };
 
@@ -2429,20 +2425,14 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               className={escalationRulesLocked ? "secondary-button" : "primary-button"}
-              onClick={() => {
-                setEscalationRulesLocked((locked) => !locked);
-                setEscalationRunStatus("");
-              }}
+              onClick={() => (escalationRulesLocked ? setEscalationRulesLocked(false) : lockEscalationRules())}
             >
               <Lock size={16} /> {escalationRulesLocked ? "Unlock rules" : "Lock rules"}
-            </button>
-            <button className="primary-button" disabled={!escalationRulesLocked} onClick={sendEscalationNotifications}>
-              <Send size={16} /> Send escalation notifications
             </button>
           </div>
           {escalationRunStatus && <p className="mt-3 text-sm font-semibold text-slate-700">{escalationRunStatus}</p>}
           <p className="mt-3 text-xs text-slate-600">
-            Locking rules sends these exact values to the server escalation engine. Set days to 0 for a live demo, or increase N days for stricter company policy.
+            Locking rules starts the automatic escalation engine with these exact values. Set days to 0 for a live demo, or increase N days for stricter company policy.
           </p>
         </div>
         <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">

@@ -31,26 +31,35 @@ export async function sendNotification(message: NotificationMessage): Promise<No
   const result: NotificationResult = { email: "skipped", teams: "skipped", errors: [] };
 
   if (process.env.RESEND_API_KEY && process.env.EMAIL_FROM && message.email?.to.length) {
-    try {
-      const response = await fetch("https://api.resend.com/emails", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          from: process.env.EMAIL_FROM,
-          to: message.email.to,
-          subject: message.email.subject,
-          html: message.email.html,
-        }),
-      });
-      result.email = response.ok ? "sent" : "failed";
-      if (!response.ok) result.errors.push(`Resend returned ${response.status}.`);
-    } catch (error) {
-      result.email = "failed";
-      result.errors.push(error instanceof Error ? error.message : "Email notification failed.");
+    let sentCount = 0;
+    const recipients = [...new Set(message.email.to)];
+
+    for (const recipient of recipients) {
+      try {
+        const response = await fetch("https://api.resend.com/emails", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            from: process.env.EMAIL_FROM,
+            to: [recipient],
+            subject: message.email.subject,
+            html: message.email.html,
+          }),
+        });
+        if (response.ok) {
+          sentCount += 1;
+        } else {
+          result.errors.push(`Resend returned ${response.status} for ${recipient}.`);
+        }
+      } catch (error) {
+        result.errors.push(error instanceof Error ? `${recipient}: ${error.message}` : `${recipient}: Email notification failed.`);
+      }
     }
+
+    result.email = sentCount > 0 ? "sent" : "failed";
   }
 
   if (process.env.TEAMS_WEBHOOK_URL) {

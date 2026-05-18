@@ -76,6 +76,30 @@ function escalationRule(): EscalationRule {
   };
 }
 
+function isEscalationRule(value: unknown): value is EscalationRule {
+  if (!value || typeof value !== "object") return false;
+  const rule = value as Partial<Record<keyof EscalationRule, unknown>>;
+  return (
+    typeof rule.employeeSubmissionDays === "number" &&
+    typeof rule.managerApprovalDays === "number" &&
+    typeof rule.quarterlyCheckInDays === "number" &&
+    typeof rule.managerNotifyAfterDays === "number" &&
+    typeof rule.hrNotifyAfterDays === "number"
+  );
+}
+
+async function latestLockedRule() {
+  const latest = await prisma.auditLog.findFirst({
+    where: { action: "Escalation rules locked" },
+    orderBy: { createdAt: "desc" },
+    select: { afterJson: true },
+  });
+
+  const value = latest?.afterJson;
+  if (isEscalationRule(value)) return value;
+  return escalationRule();
+}
+
 function daysSince(date: Date) {
   return Math.max(0, Math.floor((Date.now() - date.getTime()) / 86_400_000));
 }
@@ -147,7 +171,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized cron request." }, { status: 401 });
   }
 
-  return runEscalationNotifications(escalationRule());
+  return runEscalationNotifications(await latestLockedRule());
 }
 
 export async function POST(request: Request) {
@@ -167,6 +191,16 @@ export async function POST(request: Request) {
     managerNotifyAfterDays: sanitizeRuleNumber(body.managerNotifyAfterDays, 0),
     hrNotifyAfterDays: sanitizeRuleNumber(body.hrNotifyAfterDays, 0),
   };
+
+  await prisma.auditLog.create({
+    data: {
+      actorId: sessionUser.id,
+      entityType: "EscalationRule",
+      entityId: "active-cycle",
+      action: "Escalation rules locked",
+      afterJson: rule,
+    },
+  });
 
   return runEscalationNotifications(rule, sessionUser.id);
 }
