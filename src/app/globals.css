@@ -235,6 +235,70 @@ td {
   padding: 0.22rem;
 }
 
+.microsoft-sso-button {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  color: #1f2937;
+  display: inline-flex;
+  font-weight: 800;
+  gap: 0.7rem;
+  justify-content: center;
+  min-height: 2.65rem;
+  padding: 0.64rem 0.9rem;
+  transition: border-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+  width: 100%;
+}
+
+.microsoft-sso-button:hover {
+  border-color: #94a3b8;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.12);
+  transform: translateY(-1px);
+}
+
+.microsoft-logo {
+  display: grid;
+  gap: 2px;
+  grid-template-columns: repeat(2, 10px);
+  grid-template-rows: repeat(2, 10px);
+}
+
+.microsoft-logo i:nth-child(1) {
+  background: #f25022;
+}
+
+.microsoft-logo i:nth-child(2) {
+  background: #7fba00;
+}
+
+.microsoft-logo i:nth-child(3) {
+  background: #00a4ef;
+}
+
+.microsoft-logo i:nth-child(4) {
+  background: #ffb900;
+}
+
+.sso-divider {
+  align-items: center;
+  color: #64748b;
+  display: flex;
+  font-size: 0.75rem;
+  font-weight: 800;
+  gap: 0.75rem;
+  margin-top: 1rem;
+  text-transform: uppercase;
+}
+
+.sso-divider::before,
+.sso-divider::after {
+  background: #cbd5e1;
+  content: "";
+  flex: 1;
+  height: 1px;
+}
+
 .auth-tabs button {
   border-radius: 6px;
   color: #475569;

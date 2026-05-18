@@ -601,8 +601,9 @@ export default function Home() {
   const [signupManagerEmail, setSignupManagerEmail] = useState("");
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
-  const [loginError, setLoginError] = useState("");
+  const [loginError, setLoginError] = useState(() => initialQueryParam("sso_error") ?? "");
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [ssoConfigured, setSsoConfigured] = useState(false);
 
   const loadDatabaseState = async (userId: string) => {
     const response = await fetch("/api/state", { cache: "no-store" });
@@ -645,6 +646,13 @@ export default function Home() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/auth/sso/status", { cache: "no-store" })
+      .then((response) => (response.ok ? response.json() : { configured: false }))
+      .then((result: { configured?: boolean }) => setSsoConfigured(Boolean(result.configured)))
+      .catch(() => setSsoConfigured(false));
   }, []);
 
   useEffect(() => {
@@ -734,6 +742,10 @@ export default function Home() {
     setView("Dashboard");
     setLoginPassword("");
     setSaveStatus("idle");
+  };
+
+  const startMicrosoftSso = () => {
+    window.location.href = "/api/auth/sso/login";
   };
 
   const nav = useMemo(() => {
@@ -1180,6 +1192,8 @@ export default function Home() {
           setDepartment={setSignupDepartment}
           setManagerEmail={setSignupManagerEmail}
           login={login}
+          ssoConfigured={ssoConfigured}
+          startMicrosoftSso={startMicrosoftSso}
         />
       )}
 
@@ -2523,6 +2537,8 @@ function LoginScreen({
   setDepartment,
   setManagerEmail,
   login,
+  ssoConfigured,
+  startMicrosoftSso,
 }: {
   mode: "login" | "signup";
   name: string;
@@ -2541,6 +2557,8 @@ function LoginScreen({
   setDepartment: (department: string) => void;
   setManagerEmail: (email: string) => void;
   login: () => void;
+  ssoConfigured: boolean;
+  startMicrosoftSso: () => void;
 }) {
   const canSubmit =
     mode === "login"
@@ -2553,6 +2571,21 @@ function LoginScreen({
         <p className="eyebrow">AtomQuest 1.0</p>
         <h1>Goal Setting & Tracking Portal</h1>
         <p className="muted">Create an account or sign in with your existing workplace credentials.</p>
+
+        {ssoConfigured && (
+          <>
+            <button className="microsoft-sso-button mt-5" onClick={startMicrosoftSso}>
+              <span className="microsoft-logo" aria-hidden="true">
+                <i />
+                <i />
+                <i />
+                <i />
+              </span>
+              <span>Sign in with Microsoft</span>
+            </button>
+            <div className="sso-divider"><span>or use portal credentials</span></div>
+          </>
+        )}
 
         <div className="auth-tabs">
           <button className={classNames(mode === "login" && "auth-tab-active")} onClick={() => setMode("login")}>
