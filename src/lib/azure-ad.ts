@@ -41,6 +41,20 @@ export function azureRedirectUri() {
   return process.env.AZURE_AD_REDIRECT_URI ?? `${appBaseUrl()}/api/auth/sso/callback`;
 }
 
+function azureScopes() {
+  const scopes = ["openid", "profile", "email", "User.Read"];
+
+  if (process.env.AZURE_AD_ENABLE_MANAGER_SYNC === "true") {
+    scopes.push("User.ReadBasic.All");
+  }
+
+  if (process.env.AZURE_AD_ENABLE_GROUP_ROLE_SYNC === "true") {
+    scopes.push("GroupMember.Read.All");
+  }
+
+  return scopes;
+}
+
 function azureAuthorityUrl(path: "authorize" | "token") {
   return `https://login.microsoftonline.com/${tenantId()}/oauth2/v2.0/${path}`;
 }
@@ -51,10 +65,7 @@ export function buildAzureAuthorizeUrl(state: string) {
   url.searchParams.set("response_type", "code");
   url.searchParams.set("redirect_uri", azureRedirectUri());
   url.searchParams.set("response_mode", "query");
-  url.searchParams.set(
-    "scope",
-    ["openid", "profile", "email", "User.Read", "User.ReadBasic.All", "GroupMember.Read.All"].join(" "),
-  );
+  url.searchParams.set("scope", azureScopes().join(" "));
   url.searchParams.set("state", state);
   url.searchParams.set("prompt", "select_account");
   return url;
@@ -70,7 +81,7 @@ export async function exchangeAzureCode(code: string) {
       grant_type: "authorization_code",
       code,
       redirect_uri: azureRedirectUri(),
-      scope: ["openid", "profile", "email", "User.Read", "User.ReadBasic.All", "GroupMember.Read.All"].join(" "),
+      scope: azureScopes().join(" "),
     }),
   });
 
@@ -99,6 +110,8 @@ export async function getAzureProfile(accessToken: string) {
 }
 
 export async function getAzureManager(accessToken: string) {
+  if (process.env.AZURE_AD_ENABLE_MANAGER_SYNC !== "true") return null;
+
   try {
     return await graphGet<AzureProfile>(
       accessToken,
@@ -110,6 +123,8 @@ export async function getAzureManager(accessToken: string) {
 }
 
 export async function getAzureGroups(accessToken: string) {
+  if (process.env.AZURE_AD_ENABLE_GROUP_ROLE_SYNC !== "true") return [];
+
   try {
     const result = await graphGet<{ value?: AzureGroup[] }>(
       accessToken,
