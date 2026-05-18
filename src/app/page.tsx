@@ -692,6 +692,9 @@ export default function Home() {
     : [];
   const submittedEmployeeGoals = employeeGoals.filter((goal) => goal.status === "Submitted");
   const ownGoals = activeUser ? state.goals.filter((goal) => goal.employeeId === activeUser.id) : [];
+  const ownGoalSheetGoals = ownGoals.filter((goal) =>
+    goal.status === "Draft" || goal.status === "Returned" || goal.status === "Submitted",
+  );
 
   const completeLogin = (userId: string) => {
     const user = state.users.find((candidate) => candidate.id === userId);
@@ -859,7 +862,7 @@ export default function Home() {
     setConfirmation(null);
   };
 
-  const validation = validateGoals(ownGoals);
+  const validation = validateGoals(ownGoalSheetGoals);
   const isGoalSettingOpen = state.cycle.phase === "Goal Setting";
   const activeQuarter = quarterForPhase(state.cycle.phase);
 
@@ -902,12 +905,18 @@ export default function Home() {
     if (!activeUser) return;
     if (!isGoalSettingOpen) return;
     if (!validation.ok) return;
+    const submittableGoalIds = new Set(
+      ownGoalSheetGoals
+        .filter((goal) => goal.status === "Draft" || goal.status === "Returned")
+        .map((goal) => goal.id),
+    );
+    if (submittableGoalIds.size === 0) return;
     setAndAudit((current) =>
       addAudit(
         {
           ...current,
           goals: current.goals.map((goal) =>
-            goal.employeeId === activeUser.id ? { ...goal, status: "Submitted" } : goal,
+            submittableGoalIds.has(goal.id) ? { ...goal, status: "Submitted", locked: false } : goal,
           ),
         },
         "Submitted goal sheet",
@@ -918,7 +927,7 @@ export default function Home() {
       event: "GOAL_SUBMITTED",
       employeeId: activeUser.id,
       managerId: activeUser.managerId,
-      goalSummary: ownGoals.map((goal) => ({
+      goalSummary: ownGoalSheetGoals.map((goal) => ({
         title: goal.title,
         thrustArea: goal.thrustArea,
         uomType: goal.uomType,
@@ -1271,7 +1280,7 @@ export default function Home() {
 
           {activeUser.role === "Employee" && view === "Goals" && (
             <EmployeeGoals
-              goals={ownGoals}
+              goals={ownGoalSheetGoals}
               validation={validation}
               isGoalSettingOpen={isGoalSettingOpen}
               updateGoal={updateGoal}
@@ -1584,7 +1593,7 @@ function EmployeeGoals({
       )}
       {!sheetEditable && (
         <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-          This sheet is waiting for manager action or already locked, so employee edits are paused.
+          This sheet is waiting for manager action, so employee edits are paused until it is returned or approved.
         </div>
       )}
       <div className="space-y-4">
@@ -1640,6 +1649,9 @@ function EmployeeGoals({
             </div>
           );
         })}
+        {goals.length === 0 && (
+          <Empty text={isGoalSettingOpen ? "No active draft goals. Add goals for the current Goal Setting cycle." : "No active goal sheet is available."} />
+        )}
       </div>
     </Panel>
   );
