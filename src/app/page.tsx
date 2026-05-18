@@ -423,12 +423,19 @@ function scoreGoal(goal: Goal, actualValue: number, actualDate: string) {
   if (goal.uomType === "Timeline") {
     return new Date(actualDate) <= new Date(goal.targetDate) ? 100 : 0;
   }
+  if (goal.direction === "Max") {
+    return roundedScore((goal.targetValue / actualValue) * 100);
+  }
   return roundedScore((actualValue / goal.targetValue) * 100);
 }
 
 function roundedScore(value: number) {
   if (!Number.isFinite(value)) return 0;
   return Math.max(0, Math.round(value));
+}
+
+function barWidth(value: number) {
+  return `${Math.min(Math.max(value, 0), 100)}%`;
 }
 
 function classNames(...classes: Array<string | false | undefined>) {
@@ -1435,8 +1442,14 @@ function Dashboard({
 
   const chartData = employees.map((employee) => ({
     name: employee.name.split(" ")[0],
-    goals: state.goals.filter((goal) => goal.employeeId === employee.id).length,
-    checkIns: state.checkIns.filter((checkIn) => checkIn.employeeId === employee.id).length,
+    goals: (() => {
+      const goals = state.goals.filter((goal) => goal.employeeId === employee.id);
+      if (goals.length === 0) return 0;
+      return Math.round((goals.filter((goal) => goal.status === "Approved").length / goals.length) * 100);
+    })(),
+    checkIns: Math.round(
+      (state.checkIns.filter((checkIn) => checkIn.employeeId === employee.id).length / quarters.length) * 100,
+    ),
   }));
 
   return (
@@ -1468,10 +1481,10 @@ function Dashboard({
               <div className="chart-row" key={row.name}>
                 <span>{row.name}</span>
                 <div className="bar-track">
-                  <div className="bar-fill-blue" style={{ width: `${Math.min(row.goals * 28, 100)}%` }} />
+                  <div className="bar-fill-blue" style={{ width: barWidth(row.goals) }} />
                 </div>
                 <div className="bar-track">
-                  <div className="bar-fill-green" style={{ width: `${Math.min(row.checkIns * 45, 100)}%` }} />
+                  <div className="bar-fill-green" style={{ width: barWidth(row.checkIns) }} />
                 </div>
               </div>
             ))}
@@ -2204,7 +2217,7 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
             <div className="chart-row" key={row.quarter}>
               <span>{row.quarter}</span>
               <div className="bar-track wide">
-                <div className="bar-fill-blue" style={{ width: `${row.averageScore}%` }} />
+                <div className="bar-fill-blue" style={{ width: barWidth(row.averageScore) }} />
               </div>
               <strong>{row.averageScore}%</strong>
             </div>
@@ -2292,7 +2305,7 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
             <div className="chart-row" key={row.name}>
               <span>{row.name}</span>
               <div className="bar-track wide">
-                <div className="bar-fill-green" style={{ width: `${Math.min(row.completed * 45, 100)}%` }} />
+                <div className="bar-fill-green" style={{ width: barWidth(Math.round((row.completed / quarters.length) * 100)) }} />
               </div>
               <strong>{row.completed}</strong>
             </div>
@@ -2305,7 +2318,7 @@ function AdminReports({ state, exportCsv }: { state: AppState; exportCsv: () => 
             <div className="chart-row" key={row.name}>
               <span>{row.name.split(" ")[0]}</span>
               <div className="bar-track wide">
-                <div className="bar-fill-green" style={{ width: `${row.rate}%` }} />
+                <div className="bar-fill-green" style={{ width: barWidth(row.rate) }} />
               </div>
               <strong>{row.rate}%</strong>
               <p className="col-span-3 text-xs text-slate-500">
