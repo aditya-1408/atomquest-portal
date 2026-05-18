@@ -6,6 +6,8 @@ import {
   getAzureGroups,
   getAzureManager,
   getAzureProfile,
+  isAzureGroupRoleSyncEnabled,
+  isAzureManagerSyncEnabled,
   isAzureSsoConfigured,
   roleFromAzureGroups,
 } from "@/lib/azure-ad";
@@ -59,7 +61,7 @@ export async function GET(request: Request) {
     const managerEmail = managerProfile ? emailFromAzureProfile(managerProfile) : "";
     const existingUser = await prisma.user.findUnique({
       where: { email },
-      select: { id: true, role: true },
+      select: { id: true, role: true, managerId: true },
     });
     const role = roleFromAzureGroups(groups, existingUser?.role);
 
@@ -82,20 +84,25 @@ export async function GET(request: Request) {
           })
         : null;
 
+    const managerId =
+      role === "EMPLOYEE"
+        ? manager?.id ?? existingUser?.managerId ?? null
+        : null;
+
     const user = await prisma.user.upsert({
       where: { email },
       update: {
         name: profile.displayName || email,
         department: profile.department || "Operations",
         role,
-        managerId: role === "EMPLOYEE" ? manager?.id ?? null : null,
+        managerId,
       },
       create: {
         name: profile.displayName || email,
         email,
         department: profile.department || "Operations",
         role,
-        managerId: role === "EMPLOYEE" ? manager?.id ?? null : null,
+        managerId,
       },
       select: { id: true },
     });
@@ -109,7 +116,11 @@ export async function GET(request: Request) {
         afterJson: {
           email,
           role,
+          microsoftProfileId: profile.id ?? null,
+          managerSyncEnabled: isAzureManagerSyncEnabled(),
+          groupRoleSyncEnabled: isAzureGroupRoleSyncEnabled(),
           managerEmail: managerEmail || null,
+          managerId,
           azureGroups: azureGroupNames(groups),
         },
       },

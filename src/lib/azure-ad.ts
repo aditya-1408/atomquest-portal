@@ -44,15 +44,27 @@ export function azureRedirectUri() {
 function azureScopes() {
   const scopes = ["openid", "profile", "email", "User.Read"];
 
-  if (process.env.AZURE_AD_ENABLE_MANAGER_SYNC === "true") {
+  if (isAzureManagerSyncEnabled()) {
     scopes.push("User.ReadBasic.All");
   }
 
-  if (process.env.AZURE_AD_ENABLE_GROUP_ROLE_SYNC === "true") {
+  if (isAzureGroupRoleSyncEnabled()) {
     scopes.push("GroupMember.Read.All");
   }
 
   return scopes;
+}
+
+function isFeatureEnabled(value: string | undefined) {
+  return value !== "false";
+}
+
+export function isAzureManagerSyncEnabled() {
+  return isFeatureEnabled(process.env.AZURE_AD_ENABLE_MANAGER_SYNC);
+}
+
+export function isAzureGroupRoleSyncEnabled() {
+  return isFeatureEnabled(process.env.AZURE_AD_ENABLE_GROUP_ROLE_SYNC);
 }
 
 function azureAuthorityUrl(path: "authorize" | "token") {
@@ -110,7 +122,7 @@ export async function getAzureProfile(accessToken: string) {
 }
 
 export async function getAzureManager(accessToken: string) {
-  if (process.env.AZURE_AD_ENABLE_MANAGER_SYNC !== "true") return null;
+  if (!isAzureManagerSyncEnabled()) return null;
 
   try {
     return await graphGet<AzureProfile>(
@@ -123,7 +135,7 @@ export async function getAzureManager(accessToken: string) {
 }
 
 export async function getAzureGroups(accessToken: string) {
-  if (process.env.AZURE_AD_ENABLE_GROUP_ROLE_SYNC !== "true") return [];
+  if (!isAzureGroupRoleSyncEnabled()) return [];
 
   try {
     const result = await graphGet<{ value?: AzureGroup[] }>(
@@ -141,14 +153,36 @@ export function emailFromAzureProfile(profile: AzureProfile) {
 }
 
 export function roleFromAzureGroups(groups: AzureGroup[], existingRole?: DbRole): DbRole {
-  const adminGroup = (process.env.AZURE_AD_ADMIN_GROUP ?? "AtomQuest-Admins").toLowerCase();
-  const managerGroup = (process.env.AZURE_AD_MANAGER_GROUP ?? "AtomQuest-Managers").toLowerCase();
-  const groupNames = groups.map((group) => group.displayName?.toLowerCase()).filter(Boolean);
+  const adminGroups = configuredGroupKeys(
+    process.env.AZURE_AD_ADMIN_GROUP,
+    process.env.AZURE_AD_ADMIN_GROUP_ID,
+    "AtomQuest-Admins",
+  );
+  const managerGroups = configuredGroupKeys(
+    process.env.AZURE_AD_MANAGER_GROUP,
+    process.env.AZURE_AD_MANAGER_GROUP_ID,
+    "AtomQuest-Managers",
+  );
+  const userGroups = groups.flatMap((group) => [
+    normalizedKey(group.id),
+    normalizedKey(group.displayName),
+  ]);
 
-  if (groupNames.includes(adminGroup)) return "ADMIN";
-  if (groupNames.includes(managerGroup)) return "MANAGER";
+  if (userGroups.some((group) => adminGroups.includes(group))) return "ADMIN";
+  if (userGroups.some((group) => managerGroups.includes(group))) return "MANAGER";
 
   return existingRole === "ADMIN" || existingRole === "MANAGER" ? existingRole : "EMPLOYEE";
+}
+
+function configuredGroupKeys(nameValue: string | undefined, idValue: string | undefined, fallbackName: string) {
+  return [nameValue ?? fallbackName, idValue]
+    .flatMap((value) => (value ?? "").split(","))
+    .map(normalizedKey)
+    .filter(Boolean);
+}
+
+function normalizedKey(value: string | undefined) {
+  return (value ?? "").trim().toLowerCase();
 }
 
 export function azureGroupNames(groups: AzureGroup[]) {
