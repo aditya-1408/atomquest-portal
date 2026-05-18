@@ -23,6 +23,7 @@ type Role = "Employee" | "Manager" | "Admin";
 type UomType = "Numeric" | "Percentage" | "Timeline" | "Zero";
 type Direction = "Min" | "Max";
 type GoalStatus = "Draft" | "Submitted" | "Approved" | "Returned";
+type GoalTab = "Current" | "Returned" | "Completed" | "Shared KPI";
 type Quarter = "Q1" | "Q2" | "Q3" | "Q4";
 type ProgressStatus = "Not Started" | "On Track" | "Completed";
 
@@ -690,11 +691,14 @@ export default function Home() {
   const employeeGoals = selectedEmployee
     ? state.goals.filter((goal) => goal.employeeId === selectedEmployee.id)
     : [];
-  const submittedEmployeeGoals = employeeGoals.filter((goal) => goal.status === "Submitted");
+  const submittedEmployeeGoals = employeeGoals.filter((goal) => goal.status === "Submitted" && !goal.sharedGoalId);
   const ownGoals = activeUser ? state.goals.filter((goal) => goal.employeeId === activeUser.id) : [];
-  const ownGoalSheetGoals = ownGoals.filter((goal) =>
-    goal.status === "Draft" || goal.status === "Returned" || goal.status === "Submitted",
-  );
+  const ownGoalGroups = {
+    current: ownGoals.filter((goal) => !goal.sharedGoalId && (goal.status === "Draft" || goal.status === "Submitted")),
+    returned: ownGoals.filter((goal) => !goal.sharedGoalId && goal.status === "Returned"),
+    completed: ownGoals.filter((goal) => !goal.sharedGoalId && goal.status === "Approved"),
+    shared: ownGoals.filter((goal) => Boolean(goal.sharedGoalId)),
+  };
 
   const completeLogin = (userId: string) => {
     const user = state.users.find((candidate) => candidate.id === userId);
@@ -862,7 +866,6 @@ export default function Home() {
     setConfirmation(null);
   };
 
-  const validation = validateGoals(ownGoalSheetGoals);
   const isGoalSettingOpen = state.cycle.phase === "Goal Setting";
   const activeQuarter = quarterForPhase(state.cycle.phase);
 
@@ -901,12 +904,13 @@ export default function Home() {
     );
   };
 
-  const submitGoals = () => {
+  const submitGoals = (goalsToSubmit: Goal[]) => {
     if (!activeUser) return;
     if (!isGoalSettingOpen) return;
+    const validation = validateGoals(goalsToSubmit);
     if (!validation.ok) return;
     const submittableGoalIds = new Set(
-      ownGoalSheetGoals
+      goalsToSubmit
         .filter((goal) => goal.status === "Draft" || goal.status === "Returned")
         .map((goal) => goal.id),
     );
@@ -927,7 +931,7 @@ export default function Home() {
       event: "GOAL_SUBMITTED",
       employeeId: activeUser.id,
       managerId: activeUser.managerId,
-      goalSummary: ownGoalSheetGoals.map((goal) => ({
+      goalSummary: goalsToSubmit.map((goal) => ({
         title: goal.title,
         thrustArea: goal.thrustArea,
         uomType: goal.uomType,
@@ -945,7 +949,7 @@ export default function Home() {
         {
           ...current,
           goals: current.goals.map((goal) =>
-            goal.employeeId === selectedEmployee.id && goal.status === "Submitted"
+            goal.employeeId === selectedEmployee.id && !goal.sharedGoalId && goal.status === "Submitted"
               ? { ...goal, status: "Approved", locked: true }
               : goal,
           ),
@@ -965,7 +969,7 @@ export default function Home() {
         {
           ...current,
           goals: current.goals.map((goal) =>
-            goal.employeeId === selectedEmployee.id && goal.status === "Submitted"
+            goal.employeeId === selectedEmployee.id && !goal.sharedGoalId && goal.status === "Submitted"
               ? { ...goal, status: "Returned", locked: false }
               : goal,
           ),
@@ -987,7 +991,9 @@ export default function Home() {
         {
           ...current,
           goals: current.goals.map((goal) =>
-            goal.employeeId === employeeId ? { ...goal, locked: false, status: "Returned" } : goal,
+            goal.employeeId === employeeId && !goal.sharedGoalId && goal.status === "Approved"
+              ? { ...goal, locked: false, status: "Returned" }
+              : goal,
           ),
         },
         "Admin unlocked goal sheet",
@@ -1280,8 +1286,7 @@ export default function Home() {
 
           {activeUser.role === "Employee" && view === "Goals" && (
             <EmployeeGoals
-              goals={ownGoalSheetGoals}
-              validation={validation}
+              goalGroups={ownGoalGroups}
               isGoalSettingOpen={isGoalSettingOpen}
               updateGoal={updateGoal}
               addGoal={() =>
@@ -1552,63 +1557,113 @@ function Dashboard({
 }
 
 function EmployeeGoals({
-  goals,
-  validation,
+  goalGroups,
   isGoalSettingOpen,
   updateGoal,
   addGoal,
   removeGoal,
   submitGoals,
 }: {
-  goals: Goal[];
-  validation: ReturnType<typeof validateGoals>;
+  goalGroups: {
+    current: Goal[];
+    returned: Goal[];
+    completed: Goal[];
+    shared: Goal[];
+  };
   isGoalSettingOpen: boolean;
   updateGoal: (goalId: string, patch: Partial<Goal>) => void;
   addGoal: () => void;
   removeGoal: (goalId: string) => void;
-  submitGoals: () => void;
+  submitGoals: (goals: Goal[]) => void;
 }) {
-  const sheetEditable = isGoalSettingOpen && goals.every((goal) => goal.status === "Draft" || goal.status === "Returned");
-  const canSubmit = validation.ok && goals.length > 0 && sheetEditable;
+  const [activeTab, setActiveTab] = useState<GoalTab>("Current");
+  const tabs: Array<{ id: GoalTab; label: string; goals: Goal[] }> = [
+    { id: "Current", label: "Current goals", goals: goalGroups.current },
+    { id: "Returned", label: "Returned for rework", goals: goalGroups.returned },
+    { id: "Completed", label: "Approved & locked", goals: goalGroups.completed },
+    { id: "Shared KPI", label: "Shared KPIs", goals: goalGroups.shared },
+  ];
+  const activeGoals = tabs.find((tab) => tab.id === activeTab)?.goals ?? [];
+  const isEditableSubmissionTab = activeTab === "Current" || activeTab === "Returned";
+  const validation = isEditableSubmissionTab ? validateGoals(activeGoals) : null;
+  const sheetEditable =
+    isGoalSettingOpen &&
+    isEditableSubmissionTab &&
+    activeGoals.every((goal) => !goal.locked && (goal.status === "Draft" || goal.status === "Returned"));
+  const canAddCurrentGoal = activeTab === "Current" && sheetEditable && goalGroups.current.length < 8;
+  const canSubmit = Boolean(validation?.ok) && activeGoals.length > 0 && sheetEditable;
+  const emptyText =
+    activeTab === "Current"
+      ? isGoalSettingOpen
+        ? "No current draft goals. Add goals for the active Goal Setting cycle."
+        : "Goal creation opens during the Goal Setting phase."
+      : activeTab === "Returned"
+        ? "No returned goals are waiting for rework."
+        : activeTab === "Completed"
+          ? "No approved and locked goal sheet yet."
+          : "No shared departmental KPIs have been assigned yet.";
 
   return (
     <Panel
       title="Goal Sheet"
       actions={
         <>
-          <button className="secondary-button" onClick={addGoal} disabled={!sheetEditable || goals.length >= 8}>
+          <button className="secondary-button" onClick={addGoal} disabled={!canAddCurrentGoal}>
             <Plus size={17} /> Add goal
           </button>
-          <button className="primary-button" onClick={submitGoals} disabled={!canSubmit}>
+          <button className="primary-button" onClick={() => submitGoals(activeGoals)} disabled={!canSubmit}>
             <Send size={17} /> Submit
           </button>
         </>
       }
     >
-      <ValidationBox validation={validation} />
+      <div className="mb-4 grid gap-2 md:grid-cols-4">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            className={classNames("secondary-button justify-center", activeTab === tab.id && "ring-2 ring-blue-300")}
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+            <span className="status-badge">{tab.goals.length}</span>
+          </button>
+        ))}
+      </div>
+      {validation && <ValidationBox validation={validation} />}
       {!isGoalSettingOpen && (
         <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           Goal creation, edits, and submission are available only during the Goal Setting phase.
         </div>
       )}
-      {!sheetEditable && (
+      {isEditableSubmissionTab && activeGoals.length > 0 && !sheetEditable && (
         <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
-          This sheet is waiting for manager action, so employee edits are paused until it is returned or approved.
+          This sheet is waiting for manager action or already locked, so employee edits are paused until it is returned or unlocked.
+        </div>
+      )}
+      {activeTab === "Shared KPI" && (
+        <div className="mb-4 rounded-md border border-blue-100 bg-blue-50 p-3 text-sm text-blue-900">
+          Shared KPIs are separate from your 100% personal goal-sheet validation. Recipients can adjust only weightage before the KPI is locked.
         </div>
       )}
       <div className="space-y-4">
-        {goals.map((goal) => {
-          const canEditGoal = isGoalSettingOpen && !goal.locked && (goal.status === "Draft" || goal.status === "Returned");
-          const readOnly = !canEditGoal || Boolean(goal.sharedGoalId);
+        {activeGoals.map((goal) => {
+          const isShared = Boolean(goal.sharedGoalId);
+          const canEditGoal =
+            isGoalSettingOpen &&
+            !goal.locked &&
+            (goal.status === "Draft" || goal.status === "Returned") &&
+            (isEditableSubmissionTab || activeTab === "Shared KPI");
+          const readOnly = !canEditGoal || isShared;
+          const canEditWeightage = canEditGoal && (!isShared || activeTab === "Shared KPI");
           return (
             <div key={goal.id} className="goal-card">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <span className={classNames("status-badge", statusTone(goal.status))}>{goal.status}</span>
                   {goal.locked && <span className="ml-2 status-badge"><Lock size={12} /> Locked</span>}
-                  {goal.sharedGoalId && <span className="ml-2 status-badge"><Share2 size={12} /> Shared KPI</span>}
+                  {isShared && <span className="ml-2 status-badge"><Share2 size={12} /> Shared KPI</span>}
                 </div>
-                <button className="icon-button" disabled={!canEditGoal || Boolean(goal.sharedGoalId)} onClick={() => removeGoal(goal.id)}>
+                <button className="icon-button" disabled={!canEditGoal || isShared} onClick={() => removeGoal(goal.id)}>
                   <Trash2 size={16} />
                 </button>
               </div>
@@ -1643,15 +1698,13 @@ function EmployeeGoals({
                   <input type="date" value={goal.targetDate} disabled={readOnly} onChange={(e) => updateGoal(goal.id, { targetDate: e.target.value })} />
                 </Field>
                 <Field label="Weightage">
-                  <input type="number" min={10} max={100} value={goal.weightage} disabled={!canEditGoal} onChange={(e) => updateGoal(goal.id, { weightage: Number(e.target.value) })} />
+                  <input type="number" min={10} max={100} value={goal.weightage} disabled={!canEditWeightage} onChange={(e) => updateGoal(goal.id, { weightage: Number(e.target.value) })} />
                 </Field>
               </div>
             </div>
           );
         })}
-        {goals.length === 0 && (
-          <Empty text={isGoalSettingOpen ? "No active draft goals. Add goals for the current Goal Setting cycle." : "No active goal sheet is available."} />
-        )}
+        {activeGoals.length === 0 && <Empty text={emptyText} />}
       </div>
     </Panel>
   );
